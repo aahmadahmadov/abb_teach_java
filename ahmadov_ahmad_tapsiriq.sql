@@ -5,6 +5,17 @@
 -- =========================================================
 
 -- ===== Kohne cedvelleri silinmesi (asili olanlar evvel) =====
+-- Evvelce A2/A4/A5/A6 bendlerinde qurulan numayis cedvelleri:
+DROP TABLE IF EXISTS qeydiyyat_2nf;
+DROP TABLE IF EXISTS kurs_2nf;
+DROP TABLE IF EXISTS telebe_2nf;
+DROP TABLE IF EXISTS ders_telebe_muellim;
+DROP TABLE IF EXISTS ders_muellim_fenn;
+DROP TABLE IF EXISTS muellim_dil_4nf;
+DROP TABLE IF EXISTS muellim_fenn_4nf;
+DROP TABLE IF EXISTS muellim_bacariq;
+DROP TABLE IF EXISTS tedris_plani;
+-- Esas sxem:
 DROP TABLE IF EXISTS telebe_muellim;
 DROP TABLE IF EXISTS muellim_fenn;
 DROP TABLE IF EXISTS muellim_filial;
@@ -347,6 +358,42 @@ CREATE TABLE kurs_qeydiyyat
 -- telebe_telefon ve muellim_dil cedvellerini yuxarida, DDL bolmesinde (6 ve 8 nomreli cedveller) artiq yaratmisam - bu iki cedvel 1NF-den 5NF-e
 -- qeder deyismeden qalir, ona gore burada tekrar yaratmiram.
 
+-- 1NF cedvelini real datayla doldururuq ki, asagidaki anomaliyalar (A1c) ve C3
+-- bendindeki muqayise "fikren" yox, real UPDATE/DELETE ile gosterile bilsin.
+INSERT INTO kurs_qeydiyyat (telebe_id, telebe_ad, dogum_tarixi, kurs_kod, kurs_ad, kurs_saat, qiymet,
+                            fenn_kod, fenn_ad, muellim_id, muellim_ad, muellim_email,
+                            otaq_no, otaq_tutum, filial_kod, filial_unvan, seher,
+                            qeyd_tarixi, odenis, imtahan_bali)
+SELECT t.telebe_id,
+       t.telebe_ad,
+       t.dogum_tarixi,
+       k.kurs_kod,
+       k.kurs_ad,
+       k.kurs_saat,
+       k.qiymet,
+       f.fenn_kod,
+       f.fenn_ad,
+       m.muellim_id,
+       m.muellim_ad,
+       m.muellim_email,
+       o.otaq_no,
+       o.otaq_tutum,
+       fl.filial_kod,
+       fl.filial_unvan,
+       fl.seher,
+       q.qeyd_tarixi,
+       q.odenis,
+       q.imtahan_bali
+FROM qeydiyyat q
+         JOIN telebe t ON q.telebe_id = t.telebe_id
+         JOIN kurs k ON q.kurs_kod = k.kurs_kod
+         JOIN fenn f ON k.fenn_kod = f.fenn_kod
+         JOIN muellim m ON q.muellim_id = m.muellim_id
+         JOIN otaq o ON q.otaq_no = o.otaq_no
+         JOIN filial fl ON o.filial_kod = fl.filial_kod;
+
+SELECT COUNT(*) AS kurs_qeydiyyat_setir_sayi FROM kurs_qeydiyyat;
+
 -- c) 1NF-dən sonra hələ də qalan INSERT, UPDATE və DELETE anomaliyalarının hər biri üçün bu ssenaridən konkret nümunə verin (məsələn: "DSC-301 kursuna yazılan tək tələbə silinsə, ...").
 -- İzah:
 
@@ -364,8 +411,19 @@ CREATE TABLE kurs_qeydiyyat
 -- həmişəlik itir, çünki bu məlumatlar başqa heç bir sətirdə saxlanmır.
 
 -- d) Müzakirə: PostgreSQL-də telefonlar TEXT[] və ya JSONB istifadə etsək, cədvəl 1NF-də sayılırmı? 3-5 cümlə ilə əsaslandırın və massivin praktikada nə vaxt məqbul olduğunu yazın.
--- İzah: Sayılır, amma hər vəziyyətdə yaxşı yanaşma deyil. Əgər telefon nömrələri ayrıca istifadə olunmayacaqsa və sadəcə bir neçə mətn dəyəri kimi saxlanılıb göstəriləcəksə,
--- `TEXT[]` və ya `JSONB` istifadə etmək olar. Amma bu dəyərlərlə ayrıca axtarış, şərt və ya əlaqə qurulacaqsa, onları ayrıca cədvəldə saxlamaq daha düzgün olar.
+-- İzah:
+-- 1) Klassik (Codd/Date) baxışa görə sayılmır: 1NF hər xananın atomik olmasını tələb edir,
+--    massiv isə öz içində sıralı, indekslənə bilən elementlər saxlayır - yəni bu, gizlədilmiş
+--    təkrarlanan qrupdur (repeating group) və vergüllə yazılmış mətndən prinsipial fərqi yoxdur.
+-- 2) Müasir (SQL standartı) baxışa görə sayılır: `TEXT[]` domeni olan bir tipdir, xanada həmin
+--    domenin TƏK bir dəyəri durur, ona görə münasibət formal olaraq 1NF-i pozmur.
+-- 3) Praktikada fərq atomikliyin tərifində deyil, ödənilən qiymətdədir: massivdə FOREIGN KEY,
+--    elementə aid UNIQUE və elementə aid əlavə sütun (məsələn telefon növü, təsdiq tarixi) qurmaq olmur.
+-- 4) Ona görə mən bu işdə `telebe_telefon` ayrı cədvəlini seçdim - telefon üzrə axtarış,
+--    FK və gələcəkdə "əsas nömrə" kimi atribut əlavə etmək lazım ola bilər.
+-- 5) Massiv/JSONB isə o vaxt məqbuldur ki, dəyərlər həmişə bütöv halda oxunub yazılır, ayrıca
+--    axtarılmır və heç vaxt başqa cədvəllə əlaqələndirilmir (məsələn: log sətrində etiketlər,
+--    sorğunun ham cavabı, konfiqurasiya siyahısı).
 
 
 -- ===== Tapşırıq A2 — İkinci Normal Forma (2NF) ===== (6 bal)
@@ -387,49 +445,112 @@ CREATE TABLE kurs_qeydiyyat
 -- (telebe_id, kurs_kod) ikisinə birdən - asılıdır, yəni onlar qismən asılılıq deyil.)
 
 -- c) Cədvəli 2NF-ə parçala; bütün CREATE TABLE-ləri PK + FK ilə yaz.
+-- Qeyd: aralıq (2NF) cədvəlləri yekun sxemlə ad toqquşmasına düşməsin deyə "_2nf" şəkilçisi ilə
+-- adlandırıram və bu bəndin sonunda silmirəm - A2d-dəki itkisizlik yoxlaması onların üzərində gedir.
 
--- CREATE TABLE telebe (
---     telebe_id    VARCHAR(10) PRIMARY KEY,
---     telebe_ad    VARCHAR(60) NOT NULL,
---     dogum_tarixi DATE NOT NULL
--- );
+CREATE TABLE telebe_2nf
+(
+    telebe_id    VARCHAR(10) PRIMARY KEY,
+    telebe_ad    VARCHAR(60) NOT NULL,
+    dogum_tarixi DATE        NOT NULL
+);
 
--- CREATE TABLE kurs_2nf (
---     kurs_kod  VARCHAR(10) PRIMARY KEY,
---     kurs_ad   VARCHAR(60) NOT NULL,
---     kurs_saat INT NOT NULL,
---     qiymet    NUMERIC(8,2) NOT NULL,
---     fenn_kod  VARCHAR(10) NOT NULL,
---     fenn_ad   VARCHAR(60) NOT NULL
--- );
+CREATE TABLE kurs_2nf
+(
+    kurs_kod  VARCHAR(10) PRIMARY KEY,
+    kurs_ad   VARCHAR(60)   NOT NULL,
+    kurs_saat INT           NOT NULL CHECK (kurs_saat > 0),
+    qiymet    NUMERIC(8, 2) NOT NULL CHECK (qiymet >= 0),
+    fenn_kod  VARCHAR(10)   NOT NULL,
+    fenn_ad   VARCHAR(60)   NOT NULL
+);
 
--- CREATE TABLE qeydiyyat_2nf (
---     telebe_id     VARCHAR(10) NOT NULL,
---     kurs_kod      VARCHAR(10) NOT NULL,
---     muellim_id    VARCHAR(10) NOT NULL,
---     muellim_ad    VARCHAR(60) NOT NULL,
---     muellim_email VARCHAR(80) NOT NULL,
---     otaq_no       VARCHAR(10) NOT NULL,
---     otaq_tutum    INT,
---     filial_kod    VARCHAR(10) NOT NULL,
---     filial_unvan  VARCHAR(100) NOT NULL,
---     seher         VARCHAR(50),
---     qeyd_tarixi   DATE NOT NULL,
---     odenis        NUMERIC(8,2) NOT NULL,
---     imtahan_bali  INT,
---     PRIMARY KEY (telebe_id, kurs_kod),
---     FOREIGN KEY (telebe_id) REFERENCES telebe(telebe_id),
---     FOREIGN KEY (kurs_kod) REFERENCES kurs_2nf(kurs_kod)
--- );
+CREATE TABLE qeydiyyat_2nf
+(
+    telebe_id     VARCHAR(10)   NOT NULL,
+    kurs_kod      VARCHAR(10)   NOT NULL,
+    muellim_id    VARCHAR(10)   NOT NULL,
+    muellim_ad    VARCHAR(60)   NOT NULL,
+    muellim_email VARCHAR(80)   NOT NULL,
+    otaq_no       VARCHAR(10)   NOT NULL,
+    otaq_tutum    INT           NOT NULL CHECK (otaq_tutum > 0),
+    filial_kod    VARCHAR(10)   NOT NULL,
+    filial_unvan  VARCHAR(100)  NOT NULL,
+    seher         VARCHAR(50)   NOT NULL,
+    qeyd_tarixi   DATE          NOT NULL,
+    odenis        NUMERIC(8, 2) NOT NULL CHECK (odenis >= 0),
+    imtahan_bali  INT CHECK (imtahan_bali BETWEEN 0 AND 100),
+    CONSTRAINT pk_qeydiyyat_2nf PRIMARY KEY (telebe_id, kurs_kod),
+    CONSTRAINT fk_q2nf_telebe FOREIGN KEY (telebe_id) REFERENCES telebe_2nf (telebe_id),
+    CONSTRAINT fk_q2nf_kurs FOREIGN KEY (kurs_kod) REFERENCES kurs_2nf (kurs_kod)
+);
 
 -- (telebe_telefon və muellim_dil 1NF-dən dəyişmədən qalır.)
 
+-- Parçalanmanı real göstərmək üçün A1-dəki kurs_qeydiyyat cədvəlini üç hissəyə bölürük:
+INSERT INTO telebe_2nf (telebe_id, telebe_ad, dogum_tarixi)
+SELECT DISTINCT telebe_id, telebe_ad, dogum_tarixi
+FROM kurs_qeydiyyat;
+
+INSERT INTO kurs_2nf (kurs_kod, kurs_ad, kurs_saat, qiymet, fenn_kod, fenn_ad)
+SELECT DISTINCT kurs_kod, kurs_ad, kurs_saat, qiymet, fenn_kod, fenn_ad
+FROM kurs_qeydiyyat;
+
+INSERT INTO qeydiyyat_2nf (telebe_id, kurs_kod, muellim_id, muellim_ad, muellim_email,
+                           otaq_no, otaq_tutum, filial_kod, filial_unvan, seher,
+                           qeyd_tarixi, odenis, imtahan_bali)
+SELECT telebe_id, kurs_kod, muellim_id, muellim_ad, muellim_email,
+       otaq_no, otaq_tutum, filial_kod, filial_unvan, seher,
+       qeyd_tarixi, odenis, imtahan_bali
+FROM kurs_qeydiyyat;
+
+SELECT (SELECT COUNT(*) FROM kurs_qeydiyyat) AS nf1_setir,
+       (SELECT COUNT(*) FROM telebe_2nf)     AS telebe_2nf_setir,
+       (SELECT COUNT(*) FROM kurs_2nf)       AS kurs_2nf_setir,
+       (SELECT COUNT(*) FROM qeydiyyat_2nf)  AS qeydiyyat_2nf_setir;
+
 -- d) Parçalanmanın itkisiz (lossless-join) olduğunu izah et: hansı sütunlar üzərindən geri birləşdirmə mümkündür?
 -- İzah:
-
 -- Parçalanma itkisizdir, çünki hər iki ortaq sütun digər tərəfdə PRIMARY KEY-dir:
--- telebe_id qeydiyyat_2nf-də FK, telebe-də isə PK-dır; kurs_kod qeydiyyat_2nf-də FK, kurs_2nf-də isə PK-dır. Bu şərt ödəndiyi üçün geri JOIN saxta sətir yaratmır.
--- qeydiyyat_2nf JOIN telebe USING (telebe_id) JOIN kurs_2nf USING (kurs_kod) sorğusu dəqiq A1-in kurs_qeydiyyat cədvəlini bərpa edir.
+-- telebe_id qeydiyyat_2nf-də FK, telebe_2nf-də isə PK-dır; kurs_kod qeydiyyat_2nf-də FK,
+-- kurs_2nf-də isə PK-dır. Heath teoreminə görə ortaq sütun bir tərəfdə açar olduqda birləşmə
+-- saxta sətir yaratmır, ona görə geri JOIN dəqiq ilkin cədvəli verir.
+-- Geri birləşdirmə telebe_id və kurs_kod sütunları üzərindən gedir:
+
+SELECT q.telebe_id, t.telebe_ad, q.kurs_kod, k.kurs_ad, k.fenn_ad, q.muellim_ad, q.odenis
+FROM qeydiyyat_2nf q
+         JOIN telebe_2nf t USING (telebe_id)
+         JOIN kurs_2nf k USING (kurs_kod)
+ORDER BY q.telebe_id, q.kurs_kod;
+
+-- İtkisizliyi sübut edirik: geri birləşmə ilə ilkin 1NF cədvəli arasında
+-- hər iki istiqamətdə EXCEPT 0 sətir qaytarmalıdır (nə itən, nə də saxta sətir var).
+SELECT 'nf1 - join' AS istiqamet, COUNT(*) AS ferqli_setir
+FROM (SELECT telebe_id, telebe_ad, dogum_tarixi, kurs_kod, kurs_ad, kurs_saat, qiymet, fenn_kod, fenn_ad,
+             muellim_id, muellim_ad, muellim_email, otaq_no, otaq_tutum, filial_kod, filial_unvan, seher,
+             qeyd_tarixi, odenis, imtahan_bali
+      FROM kurs_qeydiyyat
+      EXCEPT
+      SELECT t.telebe_id, t.telebe_ad, t.dogum_tarixi, k.kurs_kod, k.kurs_ad, k.kurs_saat, k.qiymet, k.fenn_kod, k.fenn_ad,
+             q.muellim_id, q.muellim_ad, q.muellim_email, q.otaq_no, q.otaq_tutum, q.filial_kod, q.filial_unvan, q.seher,
+             q.qeyd_tarixi, q.odenis, q.imtahan_bali
+      FROM qeydiyyat_2nf q
+               JOIN telebe_2nf t USING (telebe_id)
+               JOIN kurs_2nf k USING (kurs_kod)) x
+UNION ALL
+SELECT 'join - nf1', COUNT(*)
+FROM (SELECT t.telebe_id, t.telebe_ad, t.dogum_tarixi, k.kurs_kod, k.kurs_ad, k.kurs_saat, k.qiymet, k.fenn_kod, k.fenn_ad,
+             q.muellim_id, q.muellim_ad, q.muellim_email, q.otaq_no, q.otaq_tutum, q.filial_kod, q.filial_unvan, q.seher,
+             q.qeyd_tarixi, q.odenis, q.imtahan_bali
+      FROM qeydiyyat_2nf q
+               JOIN telebe_2nf t USING (telebe_id)
+               JOIN kurs_2nf k USING (kurs_kod)
+      EXCEPT
+      SELECT telebe_id, telebe_ad, dogum_tarixi, kurs_kod, kurs_ad, kurs_saat, qiymet, fenn_kod, fenn_ad,
+             muellim_id, muellim_ad, muellim_email, otaq_no, otaq_tutum, filial_kod, filial_unvan, seher,
+             qeyd_tarixi, odenis, imtahan_bali
+      FROM kurs_qeydiyyat) y;
+-- Hər iki sətirdə 0 gəlirsə, parçalanma itkisizdir.
 
 -- ===== Tapşırıq A3 — Üçüncü Normal Forma (3NF) ===== (7 bal)
 -- a) 2NF-dən sonra qalan tranzitiv asılılıqları tap.
@@ -448,6 +569,30 @@ CREATE TABLE kurs_qeydiyyat
 -- muellim, otaq, filial, telebe, telebe_telefon, qeydiyyat, muellim_dil. Hər tranzitiv
 -- zəncir (kurs_kod->fenn_kod->fenn_ad , otaq_no->filial_kod->filial_unvan/seher ,
 -- muellim_id->muellim_ad/email) artıq ayrı cədvələ çıxarılıb, qeydiyyat-da yalnız muellim_id və otaq_no FK kimi qalıb.
+
+-- Yekun 3NF cədvəllərinin və onların məhdudiyyətlərinin real mövcudluğunu yoxlayıram:
+SELECT c.relname                                             AS cedvel,
+       COUNT(*) FILTER (WHERE con.contype = 'p')             AS pk,
+       COUNT(*) FILTER (WHERE con.contype = 'f')             AS fk,
+       COUNT(*) FILTER (WHERE con.contype = 'u')             AS uq,
+       COUNT(*) FILTER (WHERE con.contype = 'c')             AS chk
+FROM pg_class c
+         JOIN pg_namespace n ON n.oid = c.relnamespace
+         LEFT JOIN pg_constraint con ON con.conrelid = c.oid
+WHERE n.nspname = 'public'
+  AND c.relkind = 'r'
+  AND c.relname IN ('filial', 'otaq', 'fenn', 'kurs', 'muellim', 'muellim_dil',
+                    'telebe', 'telebe_telefon', 'qeydiyyat', 'qiymet_shkalasi')
+GROUP BY c.relname
+ORDER BY c.relname;
+
+-- Tranzitiv asılılıqların artıq qeydiyyat cədvəlində olmadığını da göstərmək olar:
+-- qeydiyyat-da nə muellim_ad, nə filial_unvan, nə də fenn_ad sütunu qalıb.
+SELECT column_name, data_type, is_nullable
+FROM information_schema.columns
+WHERE table_schema = 'public'
+  AND table_name = 'qeydiyyat'
+ORDER BY ordinal_position;
 
 -- c) "F-01 filialının ünvanı dəyişdi" əməliyyatı 3NF-dən əvvəl və sonra neçə sətri UPDATE edir? Hər iki halı yaz.
 -- İzah:
@@ -484,40 +629,100 @@ CREATE TABLE kurs_qeydiyyat
 
 -- c) BCNF-ə parçala, CREATE TABLE ilə yaz.
 -- İzah: pozan asılılığı (muellim_id -> fenn_kod) ayrıca cədvələ çıxarmaq lazımdır.
+-- Bu, "sadə" BCNF parçalanmasıdır - asılılığı qorumur (bax: d bəndi).
 
--- CREATE TABLE muellim_fenn (
---     muellim_id VARCHAR(10) PRIMARY KEY,
---     fenn_kod   VARCHAR(10) NOT NULL,
---     FOREIGN KEY (fenn_kod) REFERENCES fenn(fenn_kod)
--- );
+CREATE TABLE ders_muellim_fenn
+(
+    muellim_id VARCHAR(10) PRIMARY KEY,
+    fenn_kod   VARCHAR(10) NOT NULL,
+    CONSTRAINT fk_dmf_fenn FOREIGN KEY (fenn_kod) REFERENCES fenn (fenn_kod)
+);
 
--- CREATE TABLE telebe_muellim (
---     telebe_id  VARCHAR(10) NOT NULL,
---     muellim_id VARCHAR(10) NOT NULL,
---     PRIMARY KEY (telebe_id, muellim_id),
---     FOREIGN KEY (telebe_id) REFERENCES telebe(telebe_id),
---     FOREIGN KEY (muellim_id) REFERENCES muellim_fenn(muellim_id)
--- );
+CREATE TABLE ders_telebe_muellim
+(
+    telebe_id  VARCHAR(10) NOT NULL,
+    muellim_id VARCHAR(10) NOT NULL,
+    CONSTRAINT pk_dtm PRIMARY KEY (telebe_id, muellim_id),
+    CONSTRAINT fk_dtm_telebe FOREIGN KEY (telebe_id) REFERENCES telebe (telebe_id),
+    CONSTRAINT fk_dtm_muellim FOREIGN KEY (muellim_id) REFERENCES ders_muellim_fenn (muellim_id)
+);
+
+-- Parçalanmanın işlədiyini göstərmək üçün real datayla doldururuq:
+INSERT INTO ders_muellim_fenn (muellim_id, fenn_kod)
+SELECT muellim_id, fenn_kod
+FROM muellim;
+
+INSERT INTO ders_telebe_muellim (telebe_id, muellim_id)
+SELECT DISTINCT telebe_id, muellim_id
+FROM qeydiyyat;
+
+-- Geri birləşmə ders(telebe_id, fenn_kod, muellim_id) münasibətini verir:
+SELECT tm.telebe_id, mf.fenn_kod, tm.muellim_id
+FROM ders_telebe_muellim tm
+         JOIN ders_muellim_fenn mf ON tm.muellim_id = mf.muellim_id
+ORDER BY tm.telebe_id, mf.fenn_kod;
+
+-- Bu parçalanmanın zəif yeri: asağıdakı INSERT heç bir məhdudiyyəti pozmur,
+-- halbuki T-01-in eyni fənni (F-SQL) iki müəllimdən öyrənməsi deməkdir.
+INSERT INTO ders_telebe_muellim (telebe_id, muellim_id)
+VALUES ('T-01', 'M-11');
+
+-- Nəticə: T-01 üçün F-SQL iki dəfə görünür - itən asılılıq özünü məhz burada göstərir.
+SELECT tm.telebe_id, mf.fenn_kod, COUNT(*) AS muellim_sayi
+FROM ders_telebe_muellim tm
+         JOIN ders_muellim_fenn mf ON tm.muellim_id = mf.muellim_id
+GROUP BY tm.telebe_id, mf.fenn_kod
+HAVING COUNT(*) > 1;
 
 -- d) Parçalanmadan sonra hansı funksional asılılıq itir? Onu PostgreSQL-də necə qorumaq olar (UNIQUE / kompozit FK / generated column / TRIGGER) — ən azı bir üsul + DDL yaz.
 -- İzah:
--- İtən FD: (telebe_id, fenn_kod) -> muellim_id (artıq JOIN-suz yoxlamaq olmur).
--- Qorumaq üçün kompozit FK + UNIQUE istifade edile biler.
+-- İtən FD: (telebe_id, fenn_kod) -> muellim_id. Yuxarıda göstərdiyim kimi, iki cədvəlin heç
+-- birində bu asılılığı yoxlayacaq məhdudiyyət yoxdur - onu ancaq JOIN edib əl ilə görmək olur.
+-- Qorumaq üçün fenn_kod-u telebe_muellim-ə geri gətirib kompozit FK + UNIQUE qoyuruq:
+-- kompozit FK fenn_kod-un müəllimin ƏSL fənni olmasını təmin edir (yəni sütun uydurula bilməz),
+-- UNIQUE (telebe_id, fenn_kod) isə itən FD-nin özünü bərpa edir.
+-- Bu cədvəllər Bonus d bəndində test olunur.
+--
+-- Kompromis (dürüstlüyə görə qeyd edirəm): fenn_kod-u telebe_muellim-ə geri gətirməklə
+-- həmin cədvəldə muellim_id -> fenn_kod asılılığı yenidən yaranır, yəni telebe_muellim
+-- özü artıq təmiz BCNF-də deyil. Bu, bilərəkdən verilən güzəştdir: BCNF ilə asılılığın
+-- qorunması (dependency preservation) bu münasibətdə eyni anda mümkün deyil - klassik
+-- nəticəyə görə hər parçalanma hər iki xassəni birdən verə bilmir. Seçim belədir:
+--   (1) təmiz BCNF + itən asılılıq (yuxarıdakı ders_* cədvəlləri), və ya
+--   (2) asılılığın qorunması + kiçik nəzarət olunan artıqlıq (aşağıdakı variant).
+-- İkincisini seçdim, çünki artıqlıq FK ilə bağlandığına görə uyğunsuz dəyər ala bilmir -
+-- yəni praktikada təhlükəsizdir. Alternativ olaraq TRIGGER yazmaq olardı, lakin deklarativ
+-- məhdudiyyət trigger-dən həm daha sürətli, həm də daha etibarlıdır.
 
--- CREATE TABLE muellim_fenn (
---     muellim_id VARCHAR(10) PRIMARY KEY,
---     fenn_kod   VARCHAR(10) NOT NULL,
---     UNIQUE (muellim_id, fenn_kod)
--- );
+CREATE TABLE muellim_fenn
+(
+    muellim_id VARCHAR(10) PRIMARY KEY,
+    fenn_kod   VARCHAR(10) NOT NULL,
+    CONSTRAINT fk_mf_fenn FOREIGN KEY (fenn_kod) REFERENCES fenn (fenn_kod),
+    CONSTRAINT uq_muellim_fenn UNIQUE (muellim_id, fenn_kod)
+);
 
--- CREATE TABLE telebe_muellim (
---     telebe_id  VARCHAR(10) NOT NULL,
---     muellim_id VARCHAR(10) NOT NULL,
---     fenn_kod   VARCHAR(10) NOT NULL,
---     PRIMARY KEY (telebe_id, muellim_id),
---     FOREIGN KEY (muellim_id, fenn_kod) REFERENCES muellim_fenn(muellim_id, fenn_kod),
---     UNIQUE (telebe_id, fenn_kod)
--- );
+CREATE TABLE telebe_muellim
+(
+    telebe_id  VARCHAR(10) NOT NULL,
+    muellim_id VARCHAR(10) NOT NULL,
+    fenn_kod   VARCHAR(10) NOT NULL,
+    CONSTRAINT pk_telebe_muellim PRIMARY KEY (telebe_id, muellim_id),
+    CONSTRAINT fk_tm_telebe FOREIGN KEY (telebe_id) REFERENCES telebe (telebe_id),
+    CONSTRAINT fk_tm_muellim_fenn FOREIGN KEY (muellim_id, fenn_kod) REFERENCES muellim_fenn (muellim_id, fenn_kod),
+    CONSTRAINT uq_telebe_fenn UNIQUE (telebe_id, fenn_kod)
+);
+
+INSERT INTO muellim_fenn (muellim_id, fenn_kod)
+SELECT muellim_id, fenn_kod
+FROM muellim;
+
+INSERT INTO telebe_muellim (telebe_id, muellim_id, fenn_kod)
+SELECT DISTINCT q.telebe_id, q.muellim_id, m.fenn_kod
+FROM qeydiyyat q
+         JOIN muellim m ON q.muellim_id = m.muellim_id;
+
+SELECT * FROM telebe_muellim ORDER BY telebe_id, fenn_kod;
 
 
 -- ===== Tapşırıq A5 — Dördüncü Normal Forma (4NF) ===== (7 bal)
@@ -525,14 +730,29 @@ CREATE TABLE kurs_qeydiyyat
 --
 -- a) M-05 iki fənn tədris etsəydi və 3 dil bilsəydi neçə sətir olardı? Bütün sətirləri yaz.
 -- İzah: 6 sətir (2 fənn x 3 dil - fənn və dil arasında əlaqə olmadığı üçün bütün
+-- kombinasiyalar yazılmalıdır). Cədvəli real qurub dolduraraq göstərirəm:
 
--- kombinasiyalar yazılmalıdır):
--- M-05, F-SQL, Azərbaycan
--- M-05, F-SQL, İngilis
--- M-05, F-SQL, Rus
--- M-05, F-PYT, Azərbaycan
--- M-05, F-PYT, İngilis
--- M-05, F-PYT, Rus
+CREATE TABLE muellim_bacariq
+(
+    muellim_id  VARCHAR(10) NOT NULL,
+    tedris_fenn VARCHAR(10) NOT NULL,
+    bildiyi_dil VARCHAR(30) NOT NULL,
+    CONSTRAINT pk_muellim_bacariq PRIMARY KEY (muellim_id, tedris_fenn, bildiyi_dil),
+    CONSTRAINT fk_mb_muellim FOREIGN KEY (muellim_id) REFERENCES muellim (muellim_id),
+    CONSTRAINT fk_mb_fenn FOREIGN KEY (tedris_fenn) REFERENCES fenn (fenn_kod)
+);
+
+INSERT INTO muellim_bacariq (muellim_id, tedris_fenn, bildiyi_dil)
+VALUES ('M-05', 'F-SQL', 'Azərbaycan'),
+       ('M-05', 'F-SQL', 'İngilis'),
+       ('M-05', 'F-SQL', 'Rus'),
+       ('M-05', 'F-PYT', 'Azərbaycan'),
+       ('M-05', 'F-PYT', 'İngilis'),
+       ('M-05', 'F-PYT', 'Rus');
+
+SELECT * FROM muellim_bacariq ORDER BY tedris_fenn, bildiyi_dil;
+
+SELECT COUNT(*) AS m05_setir_sayi FROM muellim_bacariq WHERE muellim_id = 'M-05';
 
 -- b) Çoxqiymətli asılılıqları X ->-> Y formasında yaz.
 -- İzah:
@@ -547,29 +767,89 @@ CREATE TABLE kurs_qeydiyyat
 -- fənn öyrənəndə onu bütün dillər üçün təkrar yazmalı oluruq.
 -- Alman dili öyrənsə: 2 yeni sətir (M-05-in 2 fənni var, hər biri ilə cütləşir).
 -- Yeni fənn (F-DSC) öyrətsə: 3 yeni sətir (M-05-in 3 dili var, hər biri ilə cütləşir).
+-- Bunu real INSERT ilə göstərirəm - bir dil öyrənmək üçün 2 sətir yazmalı oluruq:
+
+INSERT INTO muellim_bacariq (muellim_id, tedris_fenn, bildiyi_dil)
+VALUES ('M-05', 'F-SQL', 'Alman'),
+       ('M-05', 'F-PYT', 'Alman');
+
+SELECT COUNT(*) AS alman_dilinden_sonra FROM muellim_bacariq WHERE muellim_id = 'M-05';
+
+-- Növbəti bəndin (d) hesablaması 6 sətirlik ilkin vəziyyət üzərində getsin deyə geri qaytarıram:
+DELETE FROM muellim_bacariq WHERE bildiyi_dil = 'Alman';
+
+SELECT COUNT(*) AS geri_qaytarildiqdan_sonra FROM muellim_bacariq WHERE muellim_id = 'M-05';
 
 -- d) 4NF-ə parçala, CREATE TABLE yaz və M-05 üçün sətir sayının necə dəyişdiyini göstər (əvvəl -> sonra).
 -- İzah: iki müstəqil çoxqiymətli faktı ayrı cədvəllərə bölürük.
+-- (Yekun sxemdəki muellim_dil ilə ad toqquşmasın deyə "_4nf" şəkilçisi ilə adlandırıram.)
 
--- CREATE TABLE muellim_fenn (
---     muellim_id VARCHAR(10) NOT NULL,
---     tedris_fenn VARCHAR(10) NOT NULL,
---     PRIMARY KEY (muellim_id, tedris_fenn)
--- );
+CREATE TABLE muellim_fenn_4nf
+(
+    muellim_id  VARCHAR(10) NOT NULL,
+    tedris_fenn VARCHAR(10) NOT NULL,
+    CONSTRAINT pk_muellim_fenn_4nf PRIMARY KEY (muellim_id, tedris_fenn),
+    CONSTRAINT fk_mf4_muellim FOREIGN KEY (muellim_id) REFERENCES muellim (muellim_id),
+    CONSTRAINT fk_mf4_fenn FOREIGN KEY (tedris_fenn) REFERENCES fenn (fenn_kod)
+);
 
--- CREATE TABLE muellim_dil (
---     muellim_id VARCHAR(10) NOT NULL,
---     bildiyi_dil VARCHAR(30) NOT NULL,
---     PRIMARY KEY (muellim_id, bildiyi_dil)
--- );
+CREATE TABLE muellim_dil_4nf
+(
+    muellim_id  VARCHAR(10) NOT NULL,
+    bildiyi_dil VARCHAR(30) NOT NULL,
+    CONSTRAINT pk_muellim_dil_4nf PRIMARY KEY (muellim_id, bildiyi_dil),
+    CONSTRAINT fk_md4_muellim FOREIGN KEY (muellim_id) REFERENCES muellim (muellim_id)
+);
 
--- M-05 üçün sətir sayı: əvvəl 6 (2 fənn x 3 dil) -> sonra 5 (muellim_fenn-də 2 + muellim_dil-də 3).
+INSERT INTO muellim_fenn_4nf (muellim_id, tedris_fenn)
+SELECT DISTINCT muellim_id, tedris_fenn FROM muellim_bacariq;
+
+INSERT INTO muellim_dil_4nf (muellim_id, bildiyi_dil)
+SELECT DISTINCT muellim_id, bildiyi_dil FROM muellim_bacariq;
+
+-- Sətir sayı: əvvəl 6 -> sonra 2 + 3 = 5
+SELECT (SELECT COUNT(*) FROM muellim_bacariq WHERE muellim_id = 'M-05')    AS evvel_4nf,
+       (SELECT COUNT(*) FROM muellim_fenn_4nf WHERE muellim_id = 'M-05')   AS sonra_fenn,
+       (SELECT COUNT(*) FROM muellim_dil_4nf WHERE muellim_id = 'M-05')    AS sonra_dil,
+       (SELECT COUNT(*) FROM muellim_fenn_4nf WHERE muellim_id = 'M-05')
+           + (SELECT COUNT(*) FROM muellim_dil_4nf WHERE muellim_id = 'M-05') AS sonra_cemi;
+
+-- İtkisizliyi yoxlayırıq: iki cədvəlin geri birləşməsi ilkin muellim_bacariq-ı verməlidir (0 fərq).
+SELECT COUNT(*) AS ferqli_setir
+FROM (SELECT muellim_id, tedris_fenn, bildiyi_dil FROM muellim_bacariq
+      EXCEPT
+      SELECT f.muellim_id, f.tedris_fenn, d.bildiyi_dil
+      FROM muellim_fenn_4nf f
+               JOIN muellim_dil_4nf d ON f.muellim_id = d.muellim_id) x;
+
+-- M-05 üçün sətir sayı: əvvəl 6 (2 fənn x 3 dil) -> sonra 5 (muellim_fenn_4nf-də 2 + muellim_dil_4nf-də 3).
 -- Burda əsil fərq məlumatın çoxluqundadı. Dəyər sayı artdıqca (məs. 5 fənn, 5 dil) əvvəlki 25 sətir olardı, sonrakı isə cəmi 10 - fərq multiplikativdən additivə düşür.
 
 -- ===== Tapşırıq A6 — Beşinci Normal Forma (5NF / PJNF) ===== (5 bal)
 -- Verilən münasibət: tedris_plani(muellim_id, kurs_kod, filial_kod)
 --
 -- a) Cədvəldə heç bir FD və MVD olmadığını qısaca əsaslandır (yəni 4NF-dədir).
+-- Müqayisə üçün ilkin (parçalanmamış) cədvəli real qururam:
+
+CREATE TABLE tedris_plani
+(
+    muellim_id VARCHAR(10) NOT NULL,
+    kurs_kod   VARCHAR(10) NOT NULL,
+    filial_kod VARCHAR(10) NOT NULL,
+    CONSTRAINT pk_tedris_plani PRIMARY KEY (muellim_id, kurs_kod, filial_kod),
+    CONSTRAINT fk_tp_muellim FOREIGN KEY (muellim_id) REFERENCES muellim (muellim_id),
+    CONSTRAINT fk_tp_kurs FOREIGN KEY (kurs_kod) REFERENCES kurs (kurs_kod),
+    CONSTRAINT fk_tp_filial FOREIGN KEY (filial_kod) REFERENCES filial (filial_kod)
+);
+
+INSERT INTO tedris_plani (muellim_id, kurs_kod, filial_kod)
+VALUES ('M-05', 'SQL-101', 'F-01'),
+       ('M-05', 'SQL-202', 'F-01'),
+       ('M-11', 'SQL-101', 'F-01'),
+       ('M-05', 'SQL-101', 'F-02');
+
+SELECT * FROM tedris_plani ORDER BY muellim_id, kurs_kod, filial_kod;
+
 -- İzah:
 
 -- FD yoxdur: muellim_id kurs_kod-u müəyyənləşdirmir (M-05 iki fərqli kurs tədris edir),
@@ -612,6 +892,20 @@ FROM muellim_kurs
     M-11,F-01,SQL-101
  */
 
+-- Nəticənin ilkin cədvəllə EYNİ olduğunu sözlə deyil, EXCEPT ilə sübut edirəm:
+-- hər iki istiqamətdə 0 fərq olmalıdır (nə itən sətir, nə saxta sətir).
+SELECT 'plan - join' AS istiqamet, COUNT(*) AS ferqli_setir
+FROM (SELECT muellim_id, kurs_kod, filial_kod FROM tedris_plani
+      EXCEPT
+      SELECT muellim_id, kurs_kod, filial_kod
+      FROM muellim_kurs NATURAL JOIN kurs_filial NATURAL JOIN muellim_filial) a
+UNION ALL
+SELECT 'join - plan', COUNT(*)
+FROM (SELECT muellim_id, kurs_kod, filial_kod
+      FROM muellim_kurs NATURAL JOIN kurs_filial NATURAL JOIN muellim_filial
+      EXCEPT
+      SELECT muellim_id, kurs_kod, filial_kod FROM tedris_plani) b;
+
 -- d) Yalnız iki proyeksiyanı (muellim_kurs |><| kurs_filial) birləşdir.
 --    Hansı saxta sətir (spurious tuple) yaranır? Real həyatda nəyi səhv iddia edir və bu niyə 5NF-i zəruri edir?
 
@@ -629,6 +923,12 @@ FROM muellim_kurs
     SQL-101,M-11,F-01
  */
 
+-- Saxta sətri "gözlə tapmaq" əvəzinə EXCEPT ilə birbaşa çıxarıram:
+SELECT muellim_id, kurs_kod, filial_kod
+FROM (SELECT muellim_id, kurs_kod, filial_kod FROM muellim_kurs NATURAL JOIN kurs_filial
+      EXCEPT
+      SELECT muellim_id, kurs_kod, filial_kod FROM tedris_plani) saxta;
+
 -- M-11 F-02-də işləmədiyi üçün bu, "M-11 SQL-101-i F-02-də tədris edir" kimi yanlış fakt iddia edir.
 -- Yalnız iki cədvəlin birləşməsi üçüncü faktı (kim harda işləyir) yoxlamadığı üçün belə saxta
 -- kombinasiyalar yaranır - buna görə 5NF üç proyeksiyanın hamısını tələb edir.
@@ -643,25 +943,60 @@ FROM muellim_kurs
 
 -- b) Sxemin ER diaqramı + kardinallıqlar (1:1, 1:N, M:N).
 -- İzah:
--- ER diaqram (mətn formasında, oxlar aşağıdakı kardinallıqları göstərir):
+-- Diaqramın qrafik (rəngli) variantı təqdim olunan PDF-də "A7b — ER diaqram" səhifəsindədir.
+-- Aşağıda həmin diaqramın mətn içindəki eyni variantı verilib.
+-- Oxunuş qaydası: "1" tərəfi valideyn (PK), "N" tərəfi övlad (FK) tərəfdir.
 --
--- filial (1) --- (N) otaq
--- fenn (1) --- (N) kurs
--- fenn (1) --- (N) muellim
--- muellim (1) --- (N) muellim (mentor, oz-ozune istinad)
--- telebe (1) --- (N) telebe_telefon
--- muellim (1) --- (N) muellim_dil
--- telebe (1) --- (N) qeydiyyat --- (N) kurs   [qeydiyyat = telebe/kurs arasinda M:N koreni]
--- muellim (1) --- (N) qeydiyyat
--- otaq (1) --- (N) qeydiyyat
--- muellim (M) --- (N) kurs    [muellim_kurs ara cedveli ile]
--- kurs (M) --- (N) filial     [kurs_filial ara cedveli ile]
--- muellim (M) --- (N) filial  [muellim_filial ara cedveli ile]
+--   ┌──────────────────┐                    ┌──────────────────┐
+--   │ FILIAL           │                    │ FENN             │
+--   │ PK filial_kod    │                    │ PK fenn_kod      │
+--   │    filial_unvan  │                    │ UQ fenn_ad       │
+--   │    seher         │                    └───┬───────────┬──┘
+--   └───┬──────────────┘                      1 │         1 │
+--     1 │                                       │           │
+--       │ N                                   N │           │ N
+--   ┌───┴──────────────┐                ┌────────┴───────┐ ┌─┴────────────────┐
+--   │ OTAQ             │                │ KURS           │ │ MUELLIM          │◄──┐
+--   │ PK otaq_no       │                │ PK kurs_kod    │ │ PK muellim_id    │   │ 1
+--   │    otaq_tutum    │                │    kurs_ad     │ │    muellim_ad    │   │ (mentor,
+--   │ FK filial_kod    │                │    kurs_saat   │ │ UQ muellim_email │   │  öz-özünə
+--   └───┬──────────────┘                │    qiymet      │ │ FK fenn_kod      │   │  istinad)
+--     1 │                               │ FK fenn_kod    │ │ FK mentor_id ────┼───┘ N
+--       │                               └───┬────────────┘ └───┬───────────┬──┘
+--       │                                 1 │                1 │         1 │
+--       │  N                                │ N                │ N         │ N
+--   ┌───┴───────────────────────────────────┴──────────────────┴───┐   ┌───┴──────────────┐
+--   │ QEYDIYYAT   (telebe ↔ kurs M:N əlaqəsinin körpü cədvəli)      │   │ MUELLIM_DIL      │
+--   │ PK telebe_id, kurs_kod                                        │   │ PK muellim_id    │
+--   │ FK telebe_id → TELEBE      FK kurs_kod → KURS                 │   │ PK dil           │
+--   │ FK muellim_id → MUELLIM    FK otaq_no → OTAQ                  │   └──────────────────┘
+--   │    qeyd_tarixi, odenis, imtahan_bali (NULL ola bilər)         │
+--   └───┬───────────────────────────────────────────────────────────┘
+--       │ N
+--     1 │
+--   ┌───┴──────────────┐   1        N   ┌──────────────────┐
+--   │ TELEBE           ├────────────────┤ TELEBE_TELEFON   │
+--   │ PK telebe_id     │                │ PK telebe_id     │
+--   │    telebe_ad     │                │ PK telefon       │
+--   │    dogum_tarixi  │                └──────────────────┘
+--   └──────────────────┘
 --
--- Kardinallıqlar: filial-otaq, fenn-kurs, fenn-muellim, muellim-mentor,
--- telebe-telefon, muellim-dil, telebe/kurs/muellim/otaq-qeydiyyat hamisi 1:N-dir.
--- muellim-kurs, kurs-filial, muellim-filial ve telebe-kurs (qeydiyyat uzerinden)
--- ise M:N-dir. Bu sxemde hec bir 1:1 elaqe yoxdur.
+--   5NF üçün üç binar körpü cədvəli (hamısı M:N açır):
+--
+--   MUELLIM ──1──N┤ MUELLIM_KURS   ├N──1── KURS       (PK muellim_id, kurs_kod)
+--   KURS    ──1──N┤ KURS_FILIAL    ├N──1── FILIAL     (PK kurs_kod, filial_kod)
+--   MUELLIM ──1──N┤ MUELLIM_FILIAL ├N──1── FILIAL     (PK muellim_id, filial_kod)
+--
+--   QIYMET_SHKALASI (PK herf, min_bal, max_bal) — heç bir cədvələ FK ilə bağlı deyil,
+--   qeydiyyat ilə yalnız non-equi (BETWEEN) JOIN üzərindən əlaqələnir (B9).
+--
+-- Kardinallıqlar:
+--   1:N  →  filial-otaq, fenn-kurs, fenn-muellim, muellim-mentor (rekursiv),
+--           telebe-telebe_telefon, muellim-muellim_dil,
+--           telebe-qeydiyyat, kurs-qeydiyyat, muellim-qeydiyyat, otaq-qeydiyyat
+--   M:N  →  telebe-kurs (qeydiyyat körpüsü ilə), muellim-kurs (muellim_kurs),
+--           kurs-filial (kurs_filial), muellim-filial (muellim_filial)
+--   1:1  →  bu sxemdə yoxdur.
 
 -- c) Bir cümlə ilə: normallaşdırma nə vaxt ziyanlıdır, denormalizasiya nə vaxt əsaslandırılır?
 -- İzah:
@@ -710,22 +1045,43 @@ FROM qeydiyyat q
          JOIN kurs k ON q.kurs_kod = k.kurs_kod
 ORDER BY t.telebe_ad;
 
+-- Qeyd: burada telebe/kurs ilə INNER JOIN kifayətdir, çünki imtahan_bali qeydiyyat-ın
+-- ÖZ sütunudur və hər qeydiyyatın FK-ları mütləq mövcuddur - yəni INNER JOIN heç bir
+-- qeydiyyatı itirmir. Bölmə LEFT JOIN-a aid olduğu üçün eyni sualın "tələbə tərəfindən"
+-- variantını da yazıram: burada LEFT JOIN həqiqətən lazımdır, çünki T-04-ün heç bir
+-- qeydiyyatı yoxdur və INNER JOIN olsa o tamamilə itərdi.
+SELECT t.telebe_ad,
+       COALESCE(k.kurs_ad, 'Qeydiyyatı yoxdur')                            AS kurs_ad,
+       COALESCE(q.imtahan_bali::TEXT, 'İmtahan verilməyib')                AS imtahan_bali
+FROM telebe t
+         LEFT JOIN qeydiyyat q ON t.telebe_id = q.telebe_id
+         LEFT JOIN kurs k ON q.kurs_kod = k.kurs_kod
+ORDER BY t.telebe_ad;
+
 -- c) Tipik səhv: LEFT JOIN-u INNER JOIN-a çevirən səhv nədir?
 --    Şərti ON əvəzinə WHERE-ə yaz, hər iki sorğunu müqayisə et.
--- Düzgün (LEFT JOIN saxlanılır):
+-- Ssenari: "hər tələbəni göstər, amma yalnız 055 ilə başlayan nömrələrini".
+-- Düzgün - süzgəc ON-un içindədir, LEFT JOIN qorunur:
 SELECT t.telebe_ad, tt.telefon
 FROM telebe t
-         LEFT JOIN telebe_telefon tt ON t.telebe_id = tt.telebe_id;
+         LEFT JOIN telebe_telefon tt
+                   ON t.telebe_id = tt.telebe_id AND tt.telefon LIKE '055%'
+ORDER BY t.telebe_ad;
 
--- Səhv (şərt WHERE-ə keçirilib, LEFT JOIN faktiki INNER JOIN-a çevrilir):
+-- Səhv - EYNİ şərt ON-dan WHERE-ə köçürülüb:
 SELECT t.telebe_ad, tt.telefon
 FROM telebe t
          LEFT JOIN telebe_telefon tt ON t.telebe_id = tt.telebe_id
-WHERE tt.telefon IS NOT NULL;
+WHERE tt.telefon LIKE '055%'
+ORDER BY t.telebe_ad;
 
--- İzah: birinci sorğu 7 sətir qaytarır (T-04/T-05 NULL telefonla daxildir), ikinci
--- sorğu 5 sətir qaytarır (T-04/T-05 tamamilə itir), çünki WHERE şərti sağ tərəfin
--- NULL olduğu sətirləri süzür - bu, LEFT JOIN-u faktiki INNER JOIN-a çevirir.
+-- İzah: fərq şərtin NƏ VAXT işləməsindədir. ON şərti birləşmə ANINDA tətbiq olunur -
+-- uyğun gəlməyən sətir üçün sağ tərəf sadəcə NULL ilə doldurulur, sol sətir qalır;
+-- ona görə birinci sorğu 5 tələbənin hamısını qaytarır (T-02, T-04, T-05 və 070-li
+-- nömrələr NULL kimi görünür). WHERE isə birləşmə BİTDİKDƏN sonra işləyir və
+-- NULL LIKE '055%' nəticəsi UNKNOWN olduğu üçün o sətirləri atır - nəticədə yalnız
+-- 055 ilə başlayan 2 sətir qalır və LEFT JOIN faktiki INNER JOIN-a çevrilir.
+-- Qayda: sağ cədvələ aid süzgəc ON-a, sol cədvələ aid süzgəc WHERE-ə yazılır.
 
 
 -- ===== Tapşırıq B3 — RIGHT (OUTER) JOIN ===== (3 bal)
@@ -812,7 +1168,7 @@ FROM filial f
 -- b) CROSS JOIN ilə "fənn x qiymət hərfi" matrisi; hər xanada həmin fənn üzrə
 --    həmin qiyməti alan tələbələrin sayı. Sıfır xanalar da görünsün.
 --    (İpucu: CROSS JOIN + LEFT JOIN + COUNT)
-SELECT f.fenn_ad, qs.herf, COUNT(q.telebe_id) AS telebe_sayi
+SELECT f.fenn_ad, qs.herf, COUNT(DISTINCT q.telebe_id) AS telebe_sayi
 FROM fenn f
          CROSS JOIN qiymet_shkalasi qs
          LEFT JOIN kurs k ON k.fenn_kod = f.fenn_kod
@@ -820,6 +1176,9 @@ FROM fenn f
                    ON q.kurs_kod = k.kurs_kod AND q.imtahan_bali BETWEEN qs.min_bal AND qs.max_bal
 GROUP BY f.fenn_ad, qs.herf
 ORDER BY f.fenn_ad, qs.herf;
+-- Qeyd: DISTINCT vacibdir - tapşırıq "tələbələrin sayı" deyir, bir fənnin isə bir neçə kursu
+-- ola bilər. DISTINCT olmasa eyni tələbə F-SQL-in həm SQL-101, həm SQL-202 kursundan eyni
+-- hərfi alsaydı iki dəfə sayılardı. Cari datada belə hal yoxdur, amma sorğu düzgün olmalıdır.
 
 -- c) Təsadüfi Dekart partlayışının əsas səbəbi bir cümlə ilə.
 -- İzah: iki cədvəl arasında JOIN şərti (ON) unudulur və ya səhv yazılır, nəticədə
@@ -996,6 +1355,19 @@ ORDER BY qs.herf;
 
 -- c) Özündən böyük bal alan hər tələbə ilə cütlük quran non-equi SELF JOIN;
 --    hər nəticə üçün "ondan yuxarıda neçə nəticə var" sütunu.
+-- Əvvəlcə cütlüklərin özünü çıxarıram (aqreqasiyasız - hansı nəticə hansından aşağıdır):
+SELECT q1.telebe_id  AS asagi_telebe,
+       q1.kurs_kod   AS asagi_kurs,
+       q1.imtahan_bali AS asagi_bal,
+       q2.telebe_id  AS yuxari_telebe,
+       q2.kurs_kod   AS yuxari_kurs,
+       q2.imtahan_bali AS yuxari_bal
+FROM qeydiyyat q1
+         JOIN qeydiyyat q2 ON q2.imtahan_bali > q1.imtahan_bali
+ORDER BY q1.imtahan_bali DESC, q2.imtahan_bali DESC;
+
+-- Sonra eyni birləşmənin üzərində sayğac sütununu hesablayıram.
+-- Burada LEFT JOIN-dur ki, ən yüksək bal (92) da 0 ilə sətir kimi qalsın.
 SELECT q1.telebe_id, q1.kurs_kod, q1.imtahan_bali, COUNT(q2.imtahan_bali) AS ondan_yuxari_sayi
 FROM qeydiyyat q1
          LEFT JOIN qeydiyyat q2 ON q2.imtahan_bali > q1.imtahan_bali
@@ -1260,37 +1632,75 @@ FROM muellim_kurs mk
 -- (real UPDATE / DELETE / INSERT ilə) yerinə yetir, təsirlənən sətir
 -- sayını müqayisə et.
 --
+-- Qeyd: A1b-də qurduğum kurs_qeydiyyat (1NF, hələ normallaşmamış) cədvəli real datayla
+-- doludur, ona görə hər iki tərəfi "fikrən" yox, real icra ilə müqayisə edirəm.
+-- psql hər əməliyyatdan sonra təsirlənən sətir sayını özü çap edir (UPDATE n / DELETE n).
+
 -- a) Müəllim M-05-in e-poçtu dəyişdi.
+-- Normallaşdırılmamış cədvəldə:
+UPDATE kurs_qeydiyyat
+SET muellim_email = 'reshad.quliyev@akademiya.az'
+WHERE muellim_id = 'M-05';
+-- Nəticə: UPDATE 3 — M-05-in olduğu hər sətir ayrıca yenilənir
+-- (T-01/SQL-101, T-02/SQL-101, T-05/SQL-101).
+
+-- Normallaşdırılmış sxemdə:
 UPDATE muellim
 SET muellim_email = 'reshad.quliyev@akademiya.az'
 WHERE muellim_id = 'M-05';
--- Nəticə: 1 sətir təsirlənir (yalnız muellim cədvəlində).
+-- Nəticə: UPDATE 1 — e-poçt yalnız bir yerdə saxlanılır.
 
--- İzah: Normallaşdırılmamış kurs_qeydiyyat-da isə M-05-in olduğu bütün sətirlər
--- (3 sətir: T-01/SQL-101, T-02/SQL-101, T-05/SQL-101) ayrı-ayrılıqda yenilənməli olardı.
+-- Fərq: 3 sətir → 1 sətir. Real bazada bu fərq qeydiyyat sayı qədər böyüyür və
+-- bir sətir unudulsa eyni müəllimin iki fərqli e-poçtu yaranır (UPDATE anomaliyası).
 
 -- b) Yeni fənn ("Kibertəhlükəsizlik") əlavə olunur — hələ kursu və tələbəsi yoxdur.
 --    Normallaşdırılmamış cədvəldə bunu ümumiyyətlə yazmaq olurmu?
+-- Normallaşdırılmış sxemdə problemsizdir:
 INSERT INTO fenn (fenn_kod, fenn_ad)
 VALUES ('F-SEC', 'Kibertəhlükəsizlik');
--- Nəticə: 1 sətir əlavə olunur, heç bir problem yoxdur (fenn kurs-dan asılı deyil).
+-- Nəticə: INSERT 0 1 — fenn cədvəli kursdan asılı deyil.
 
--- İzah: Normallaşdırılmamış kurs_qeydiyyat-da bunu yazmaq mümkün deyil, çünki
--- kurs_kod (və digər kurs sütunları) NOT NULL-dur - kursu olmayan fənni sətir
--- kimi ifadə etmək olmur (INSERT anomaliyası).
+-- Normallaşdırılmamış cədvəldə cəhd edirik. Fənndən başqa heç nə bilmirik,
+-- ona görə qalan sütunları NULL qoymalı oluruq:
+INSERT INTO kurs_qeydiyyat (fenn_kod, fenn_ad)
+VALUES ('F-SEC', 'Kibertəhlükəsizlik');
+-- GÖZLƏNİLƏN NƏTİCƏ: XƏTA — null value in column "telebe_id" ... violates not-null constraint.
+-- Yəni fənni yazmaq üçün uydurma tələbə və uydurma kurs da yazmalıyıq. Bu, məhz
+-- INSERT anomaliyasıdır: müstəqil bir faktı yalnız başqa faktla birlikdə saxlaya bilirik.
 
 -- c) DSC-301 kursuna yazılan tək tələbənin (T-03) qeydiyyatı silinir.
 --    Normallaşdırılmamış cədvəldə hansı məlumat həmişəlik itir?
+-- Silmədən əvvəl DSC-301 haqqında nə bilirik:
+SELECT DISTINCT kurs_kod, kurs_ad, kurs_saat, qiymet, fenn_kod, fenn_ad
+FROM kurs_qeydiyyat
+WHERE kurs_kod = 'DSC-301';
+
+-- Normallaşdırılmamış cədvəldə silirik:
+DELETE
+FROM kurs_qeydiyyat
+WHERE telebe_id = 'T-03'
+  AND kurs_kod = 'DSC-301';
+-- Nəticə: DELETE 1
+
+-- Silmədən sonra DSC-301 haqqında nə qaldı:
+SELECT DISTINCT kurs_kod, kurs_ad, kurs_saat, qiymet, fenn_kod, fenn_ad
+FROM kurs_qeydiyyat
+WHERE kurs_kod = 'DSC-301';
+-- Nəticə: 0 sətir — kursun adı, saatı, qiyməti və aid olduğu fənn həmişəlik itdi.
+
+-- Normallaşdırılmış sxemdə eyni əməliyyat:
 DELETE
 FROM qeydiyyat
 WHERE telebe_id = 'T-03'
   AND kurs_kod = 'DSC-301';
--- Nəticə: 1 sətir silinir, kurs (DSC-301) və fənn (F-DSC) məlumatı öz
--- cədvəllərində (kurs, fenn) toxunulmadan qalır.
+-- Nəticə: DELETE 1
 
--- İzah: Normallaşdırılmamış kurs_qeydiyyat-da bu sətrin silinməsi kurs_ad,
--- kurs_saat, qiymet, fenn_kod, fenn_ad kimi məlumatları da özü ilə həmişəlik
--- apararaq itirər (DELETE anomaliyası).
+-- Kurs və fənn məlumatı öz cədvəllərində toxunulmadan qalır:
+SELECT k.kurs_kod, k.kurs_ad, k.kurs_saat, k.qiymet, f.fenn_kod, f.fenn_ad
+FROM kurs k
+         JOIN fenn f ON k.fenn_kod = f.fenn_kod
+WHERE k.kurs_kod = 'DSC-301';
+-- Nəticə: 1 sətir — heç nə itmədi (DELETE anomaliyası aradan qalxdı).
 
 -- Nəticə: bu üç hal hansı anomaliyalara (UPDATE / INSERT / DELETE) uyğundur?
 -- İzah: a) UPDATE anomaliyası, b) INSERT anomaliyası, c) DELETE anomaliyası.
@@ -1305,20 +1715,35 @@ WHERE telebe_id = 'T-03'
 
 -- ===== Bonus a — EXPLAIN (ANALYZE, BUFFERS) =====
 -- C1 sorğusu üçün icra et; birləşmə alqoritmlərini (Nested Loop, Hash Join, Merge Join) sadala və seçimin səbəbini izah et.
+-- Qeyd: aşağıdakı sorğu C1-in EYNİSİDİR (bütün 22 sütun və 9 cədvəl ilə), yalnız qarşısına
+-- EXPLAIN (ANALYZE, BUFFERS) əlavə olunub.
 EXPLAIN (ANALYZE, BUFFERS)
 SELECT t.telebe_id,
        t.telebe_ad,
+       t.dogum_tarixi,
        tel.telefonlar,
        q.kurs_kod,
        k.kurs_ad,
+       k.kurs_saat,
+       k.qiymet,
+       k.fenn_kod,
+       f.fenn_ad,
+       m.muellim_id,
        m.muellim_ad,
+       m.muellim_email,
        dil.muellim_dilleri,
+       o.otaq_no,
+       o.otaq_tutum,
+       fl.filial_kod,
        fl.filial_unvan,
+       fl.seher,
+       q.qeyd_tarixi,
        q.odenis,
        q.imtahan_bali
 FROM qeydiyyat q
          JOIN telebe t ON q.telebe_id = t.telebe_id
          JOIN kurs k ON q.kurs_kod = k.kurs_kod
+         JOIN fenn f ON k.fenn_kod = f.fenn_kod
          JOIN muellim m ON q.muellim_id = m.muellim_id
          JOIN otaq o ON q.otaq_no = o.otaq_no
          JOIN filial fl ON o.filial_kod = fl.filial_kod
@@ -1327,11 +1752,28 @@ FROM qeydiyyat q
                     GROUP BY telebe_id) tel ON tel.telebe_id = t.telebe_id
          LEFT JOIN (SELECT muellim_id, STRING_AGG(dil, ', ') AS muellim_dilleri
                     FROM muellim_dil
-                    GROUP BY muellim_id) dil ON dil.muellim_id = m.muellim_id;
+                    GROUP BY muellim_id) dil ON dil.muellim_id = m.muellim_id
+ORDER BY t.telebe_id, q.kurs_kod;
 
--- İzah: cədvəllər çox kiçik olduğu üçün planlaşdırıcı adətən Hash Join və ya
--- Nested Loop seçir (Merge Join isə böyük, əvvəlcədən sıralanmış cədvəllərdə
--- üstünlük təşkil edir). Nəticəni (screenshot) ayrıca PDF-də göstər.
+-- İzah: planda seçilən birləşmə alqoritmləri (yuxarıdakı çıxışdan oxunub):
+--   * Hash Join      — 6 ədəd (qeydiyyat↔telebe, ↔kurs, kurs↔fenn, ↔muellim, ↔otaq, otaq↔filial)
+--   * Hash Left Join — 2 ədəd (telefon və dil üzrə STRING_AGG alt-sorğuları ilə)
+--   * Nested Loop    — 0 ədəd
+--   * Merge Join     — 0 ədəd
+-- Yəni planlaşdırıcı BÜTÜN birləşmələr üçün hash əsaslı alqoritm seçib.
+-- Əlavə düyünlər: bütün 9 cədvəl üçün Seq Scan, iki STRING_AGG üçün HashAggregate,
+-- sonda ORDER BY üçün bir Sort. Ümumi cost 202.91, Execution Time 0.130 ms.
+--
+-- Seçimin səbəbi:
+-- 1) Bütün cədvəllər bir səhifəyə sığır (Buffers: shared hit=9), ona görə Seq Scan indeksdən
+--    ucuzdur - indeks oxumaq əlavə mərhələdir, cədvəli birbaşa oxumaq isə bir bloka baxmaqdır.
+-- 2) Birləşmə şərtlərinin hamısı bərabərlikdir (=). Hash Join yalnız bərabərlik şərti ilə
+--    işləyir, ona görə burada namizəddir; B9-dakı BETWEEN şərti olsaydı Hash Join mümkün olmazdı.
+-- 3) Kiçik tərəf (telebe, kurs, muellim, otaq, filial, fenn - hər biri 3-5 sətir) yaddaşda
+--    hash cədvəli kimi qurulur (Memory Usage: 9kB) və böyük tərəf bir dəfə skan edilir.
+--    Bu, O(N+M)-dir; Nested Loop isə indekssiz O(N*M) olardı.
+-- 4) Merge Join seçilmədi, çünki heç bir cədvəl birləşmə sütunu üzrə sıralı deyil -
+--    onu seçmək üçün planlaşdırıcı hər tərəfi ayrıca Sort etməli olardı (bax: Bonus b).
 
 
 -- ===== Bonus b — enable_hashjoin = off =====
@@ -1341,17 +1783,30 @@ SET enable_hashjoin = off;
 EXPLAIN (ANALYZE, BUFFERS)
 SELECT t.telebe_id,
        t.telebe_ad,
+       t.dogum_tarixi,
        tel.telefonlar,
        q.kurs_kod,
        k.kurs_ad,
+       k.kurs_saat,
+       k.qiymet,
+       k.fenn_kod,
+       f.fenn_ad,
+       m.muellim_id,
        m.muellim_ad,
+       m.muellim_email,
        dil.muellim_dilleri,
+       o.otaq_no,
+       o.otaq_tutum,
+       fl.filial_kod,
        fl.filial_unvan,
+       fl.seher,
+       q.qeyd_tarixi,
        q.odenis,
        q.imtahan_bali
 FROM qeydiyyat q
          JOIN telebe t ON q.telebe_id = t.telebe_id
          JOIN kurs k ON q.kurs_kod = k.kurs_kod
+         JOIN fenn f ON k.fenn_kod = f.fenn_kod
          JOIN muellim m ON q.muellim_id = m.muellim_id
          JOIN otaq o ON q.otaq_no = o.otaq_no
          JOIN filial fl ON o.filial_kod = fl.filial_kod
@@ -1360,14 +1815,25 @@ FROM qeydiyyat q
                     GROUP BY telebe_id) tel ON tel.telebe_id = t.telebe_id
          LEFT JOIN (SELECT muellim_id, STRING_AGG(dil, ', ') AS muellim_dilleri
                     FROM muellim_dil
-                    GROUP BY muellim_id) dil ON dil.muellim_id = m.muellim_id;
+                    GROUP BY muellim_id) dil ON dil.muellim_id = m.muellim_id
+ORDER BY t.telebe_id, q.kurs_kod;
 
 SET enable_hashjoin = on;
 
--- İzah: Hash Join söndürüldükdə planlaşdırıcı Merge Join-a keçdi (hər iki tərəfi
--- ortaq sütun üzrə sort edib sıra ilə müqayisə etdi). Bizim cədvəllər çox kiçik
--- olduğu üçün icra vaxtında hiss ediləcək fərq az olur, amma EXPLAIN planında
--- seçilən alqoritm və planlaşdırılan xərc (cost) dəyişir.
+-- İzah: nə dəyişdi (iki planın müqayisəsi):
+--   * 6 Hash Join      → 6 Merge Join
+--   * 2 Hash Left Join → 2 Merge Left Join
+--   * Hash / HashAggregate düyünlərinin əvəzinə hər birləşmə tərəfi üçün ayrıca Sort düyünü
+--     əlavə olundu (Sort Method: quicksort Memory: 25kB).
+--   * Ümumi cost: 202.91 → 426.97 (təxminən 2.1 dəfə baha).
+--   * Execution Time: 0.130 ms → 0.166 ms.
+-- Səbəb: Merge Join hər iki tərəfin birləşmə sütunu üzrə SIRALI olmasını tələb edir.
+-- Cədvəllərdə bu sütunlar üzrə indeks olmadığı üçün sıralamanı planlaşdırıcı özü etməlidir,
+-- bu da plana 9-a yaxın əlavə Sort gətirir - xərcin artması məhz buradandır.
+-- Cədvəllər cəmi 3-7 sətirlik olduğu üçün real icra vaxtındakı fərq mikrosaniyələrlə ölçülür,
+-- lakin planlaşdırıcının qiymətləndirdiyi xərc (cost) fərqi aydın görünür: hash söndürülməsəydi
+-- o, heç vaxt bu planı seçməzdi.
+-- Sonda parametri geri qaytarıram ki, növbəti sorğular normal planla işləsin.
 
 
 -- ===== Bonus c — İndeks =====
@@ -1389,36 +1855,34 @@ WHERE muellim_id = 'M-05';
 -- ===== Bonus d — TRIGGER testi =====
 -- A4-də itən funksional asılılığı qorumaq üçün yazdığın mexanizmi test et:
 -- qaydanı pozan bir INSERT yaz və xətanın alındığını göstər.
--- A4-dəki mexanizmi (kompozit FK + UNIQUE) real yaradıb test edirik:
-CREATE TABLE muellim_fenn
-(
-    muellim_id VARCHAR(10) PRIMARY KEY,
-    fenn_kod   VARCHAR(10) NOT NULL REFERENCES fenn (fenn_kod),
-    UNIQUE (muellim_id, fenn_kod)
-);
+-- A4d-dəki mexanizm (kompozit FK + UNIQUE) həmin bənddə real yaradılıb və doldurulub.
+-- Burada onu iki fərqli pozuntu ilə test edirəm.
+-- Cari vəziyyət:
+SELECT * FROM telebe_muellim ORDER BY telebe_id, fenn_kod;
 
-CREATE TABLE telebe_muellim
-(
-    telebe_id  VARCHAR(10) NOT NULL REFERENCES telebe (telebe_id),
-    muellim_id VARCHAR(10) NOT NULL,
-    fenn_kod   VARCHAR(10) NOT NULL,
-    PRIMARY KEY (telebe_id, muellim_id),
-    FOREIGN KEY (muellim_id, fenn_kod) REFERENCES muellim_fenn (muellim_id, fenn_kod),
-    UNIQUE (telebe_id, fenn_kod)
-);
-
-INSERT INTO muellim_fenn (muellim_id, fenn_kod)
-VALUES ('M-05', 'F-SQL'),
-       ('M-11', 'F-SQL');
-
-INSERT INTO telebe_muellim (telebe_id, muellim_id, fenn_kod)
-VALUES ('T-01', 'M-05', 'F-SQL');
-
--- Qaydanı pozan INSERT: T-01 eyni fənni (F-SQL) ikinci bir müəllimdən (M-11) öyrənmək istəyir.
+-- TEST 1 — itən FD-ni pozan INSERT:
+-- T-01 artıq F-SQL-i M-05-dən öyrənir; indi eyni fənni M-11-dən də öyrənmək istəyir.
+-- Bu, (telebe_id, fenn_kod) -> muellim_id asılılığını pozur.
 INSERT INTO telebe_muellim (telebe_id, muellim_id, fenn_kod)
 VALUES ('T-01', 'M-11', 'F-SQL');
--- Gözlənilən nəticə: XƏTA - "duplicate key value violates unique constraint"
--- (UNIQUE (telebe_id, fenn_kod) pozulur), çünki T-01 artıq F-SQL-i M-05-dən
--- öyrənir, ikinci müəllimdən eyni fənni öyrənə bilməz.
+-- GÖZLƏNİLƏN NƏTİCƏ: XƏTA — duplicate key value violates unique constraint
+-- "uq_telebe_fenn", DETAIL: Key (telebe_id, fenn_kod)=(T-01, F-SQL) already exists.
 
--- İzah: test nəticəsini (xəta mesajının screenshot-unu) ayrıca PDF-də göstər.
+-- TEST 2 — kompozit FK-nı pozan INSERT:
+-- M-11 əslində F-SQL tədris edir; onu F-PYT müəllimi kimi yazmağa çalışırıq.
+-- Kompozit FK (muellim_id, fenn_kod) belə uydurma cütlüyü qəbul etmir.
+INSERT INTO telebe_muellim (telebe_id, muellim_id, fenn_kod)
+VALUES ('T-04', 'M-11', 'F-PYT');
+-- GÖZLƏNİLƏN NƏTİCƏ: XƏTA — insert or update on table "telebe_muellim" violates
+-- foreign key constraint "fk_tm_muellim_fenn".
+
+-- TEST 3 — qaydaya uyğun INSERT işləməlidir (mexanizm düzgün sətri bloklamır):
+INSERT INTO telebe_muellim (telebe_id, muellim_id, fenn_kod)
+VALUES ('T-04', 'M-13', 'F-PYT');
+-- Gözlənilən nəticə: INSERT 0 1
+
+SELECT * FROM telebe_muellim ORDER BY telebe_id, fenn_kod;
+
+-- İzah: UNIQUE (telebe_id, fenn_kod) A4-də itən funksional asılılığı bərpa edir,
+-- kompozit FK isə fenn_kod sütununun müəllimin ƏSL fənni olmasını təmin edir.
+-- İkisi birlikdə TRIGGER yazmadan, deklarativ yolla asılılığı qoruyur.
