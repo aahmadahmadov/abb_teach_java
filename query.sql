@@ -1,413 +1,317 @@
-drop table if exists satislar;
+-- =====================================================================
+-- SQL Məhdudiyyətləri və İndekslər — Praktik Tapşırıq (40 tapşırıq)
+-- Ad, Soyad: Ahmad Ahmadov
+-- Qrup: -
+-- Tarix: 2026-09-15
+-- Mühit: PostgreSQL 15+
+-- Qeyd: Ölçmə nəticələri və izahlar hesabat.md faylındadır.
+-- =====================================================================
 
-create table satislar
+
+-- =====================================================================
+-- Hazırlıq — 1. İş sahəsi
+-- =====================================================================
+
+CREATE SCHEMA IF NOT EXISTS magaza;
+SET
+search_path TO magaza, public;
+-- İcra vaxtını görmək üçün (psql-də):
+\timing
+on
+-- Planları oxunaqlı saxlamaq üçün paralelliyi söndürün:
+SET max_parallel_workers_per_gather = 0;
+
+
+-- =====================================================================
+-- Hazırlıq — 2. İndeks bölmələri üçün cədvəl (G və H bölmələri)
+-- =====================================================================
+
+DROP TABLE IF EXISTS satis_log;
+CREATE TABLE satis_log
 (
-    satis_id     int primary key,
-    mehsul       varchar(50),
-    kateqoriya   varchar(30),
-    seher        varchar(30),
-    satici       varchar(50),
-    miqdar       int,
-    qiymet       numeric(10, 2),
-    endirim_faiz numeric(5, 2),
-    tarix        date
+    id           INT,
+    musteri_kodu INT,
+    mehsul_adi   VARCHAR(80),
+    kateqoriya   VARCHAR(30),
+    seher        VARCHAR(30),
+    status       VARCHAR(20),
+    miqdar       INT,
+    mebleg       NUMERIC(12, 2),
+    tarix        DATE
 );
 
-insert into satislar (satis_id, mehsul, kateqoriya, seher, satici, miqdar, qiymet, endirim_faiz, tarix)
-values (1, ' noutbuk ', 'Texnika', 'Bakı', 'aysel memmedova', 2, 1250.00, 10.00, date '2024-01-15'),
-       (2, 'MONITOR', 'Texnika', 'Bakı', 'aysel memmedova', 3, 320.50, null, date '2024-01-28'),
-       (3, 'klaviatura', 'Aksesuar', 'Gəncə', 'RAUF ELIYEV', 5, 45.90, 0.00, date '2024-02-05'),
-       (4, 'Printer', 'Texnika', 'Sumqayıt', 'nigar huseynova', 1, 480.00, 5.00, date '2024-02-17'),
-       (5, 'telefon ', 'Texnika', 'Bakı', 'Elvin Qasimov', 4, 899.99, 15.00, date '2024-03-03'),
-       (6, 'tablet', 'Texnika', 'Gəncə', 'RAUF ELIYEV', 2, 640.00, null, date '2024-03-11'),
-       (7, 'kamera', 'Texnika', 'Bakı', 'aysel memmedova', 1, 1250.00, null, date '2024-03-22'),
-       (8, ' kabel', 'Aksesuar', 'Sumqayıt', 'nigar huseynova', 10, 12.50, 0.00, date '2024-04-02'),
-       (9, 'MONITOR', 'Texnika', 'Şəki', 'Elvin Qasimov', 2, 320.50, null, date '2024-04-14'),
-       (10, 'noutbuk', 'Texnika', 'Gəncə', 'RAUF ELIYEV', 1, 1799.00, 20.00, date '2024-04-25'),
-       (11, 'klaviatura', 'Aksesuar', 'Bakı', 'Elvin Qasimov', 6, 45.90, null, date '2024-05-06'),
-       (12, 'Telefon', 'Texnika', 'Sumqayıt', 'nigar huseynova', 3, 899.99, null, date '2024-05-19'),
-       (13, 'kabel', 'Aksesuar', 'Bakı', 'aysel memmedova', 8, 12.50, 0.00, date '2024-06-01'),
-       (14, 'printer', 'Texnika', null, 'Elvin Qasimov', 2, 480.00, 10.00, date '2024-06-12'),
-       (15, 'kamera', 'Texnika', 'Gəncə', 'RAUF ELIYEV', 1, 1150.00, null, date '2024-06-23'),
-       (16, 'tablet ', 'Texnika', 'Bakı', 'nigar huseynova', 4, 640.00, 25.00, date '2024-07-04'),
-       (17, 'MONITOR ', 'Texnika', 'Sumqayıt', 'aysel memmedova', 5, 299.00, null, date '2024-07-15'),
-       (18, 'qulaqliq', 'Aksesuar', 'Bakı', 'Elvin Qasimov', 7, 89.90, 5.00, date '2024-07-27');
-
-
--- task 1: Hər satış üçün satis_id, məhsul adının boşluqsuz və böyük hərflərlə yazılışı, həmin adın hərf sayı və ilk 3 hərfi göstərilən sorğunu yazın. Nəticə satis_id üzrə sıralansın.
-
-select s.satis_id,
-       upper(trim(s.mehsul))          as mehsul_adi,
-       length(trim(s.mehsul))         as herf_sayi,
-       upper(left(trim(s.mehsul), 3)) as ilk_3_herf
-from satislar s
-order by s.satis_id;
-
--- task 2: Cədvəldəki təkrarsız məhsul adlarını çıxarın. Səliqəsizlik təmizlənməlidir — ' noutbuk ' ilə 'noutbuk' eyni sayılsın. Əlifba sırası ilə.
-
-select distinct upper(trim(s.mehsul)) as mehsul_adi
-from satislar s
-order by mehsul_adi;
-
--- task 3: Hər satış üçün MƏHSUL / Şəhər formatında etiket sütunu düzəldin. Şəhər NULL olduqda etiketdə NAMELUM yazılsın.
-
-select *, concat(upper(trim(s.mehsul)), ' / ', coalesce(trim(s.seher), 'NAMELUM')) as etiket
-from satislar s;
-
--- task 4: Satıcıların təkrarsız siyahısını çıxarın və `satici` sütununu ad və soyad olmaqla iki sütuna bölün.
-
-select left(upper(trim(s.satici)), position(' ' in upper(trim(s.satici))) - 1)   as satici_adi,
-       substr(upper(trim(s.satici)), position(' ' in upper(trim(s.satici))) + 1) as satici_soyadi
-from satislar s
-group by s.satici;
-
--- task 5: Hər satış üçün anbar kodu yaradın: məhsulun ilk 3 hərfi (böyük) - satışın ayı - 3 rəqəmli `satis_id`. Nümunə: `NOU-01-001`.
-
-select *,
-       concat(left(upper(trim(s.mehsul)), 3), '-', to_char(s.tarix, 'MM'), '-',
-              lpad(s.satis_id::varchar, 3, '0')) as anbar_kodu
-from satislar s;
-
--- task 6: Hər satış üçün ümumi məbləği (`qiymet * miqdar`), onun 18% ƏDV-ni (2 rəqəmə yuvarlaqlaşdırılmış), qiymətin yuxarı və aşağı yuvarlaqlaşdırılmış variantını hesablayın. Ümumi məbləğə görə azalan sıra.
-
-select *,
-       qiymet * miqdar                      as umumi_mebleg,
-       round(qiymet * miqdar * 18 / 100, 2) as edv,
-       ceiling(qiymet)                      as yuxari_qiymet,
-       floor(qiymet)                        as asagi_qiymet
-from satislar
-order by umumi_mebleg desc;
-
--- task 7: Hər satış üçün: `miqdar`-ın 2-yə bölünməsindən qalıq, `miqdar`-ın 5-dən fərqinin modulu və qiymətin kvadrat kökü (2 rəqəm).
-
-select *,
-       miqdar % 2             as qaliq,
-       abs(miqdar - 5)        as modul_ferq,
-       round(sqrt(qiymet), 2) as kvadrat_kok
-from satislar;
-
--- task 8: Ödəniləcək məbləği hesablayın: `qiymet * miqdar` üzərinə `endirim_faiz` tətbiq olunsun. Endirim NULL olarsa 0 kimi qəbul edilsin. Azalan sıra.
-
-select *,
-       coalesce(qiymet * miqdar, 0) *
-       (1 - coalesce(endirim_faiz, 0) / 100.0) as odenilecek_mebleg
-from satislar
-order by odenilecek_mebleg desc;
-
--- task 9: Məbləği bütün satışların orta məbləğindən böyük olan satışları tapın. Orta məbləğ sorğunun içində hesablanmalıdır (əl ilə rəqəm yazmaq olmaz).
-
-select *
-from satislar
-where qiymet * miqdar > (select avg(qiymet * miqdar) from satislar);
-
--- task 10: Hər satışın tarixindən il, ay və gün hissələrini ayrı sütunlarda çıxarın.
-
-select *,
-       extract(year from tarix)  as il,
-       extract(month from tarix) as ay,
-       extract(day from tarix)   as gun
-from satislar;
-
--- task 11: Yalnız iyun və iyul aylarındakı satışlar üçün: satışın üzərindən neçə gün keçdiyi və tarixə 30 gün əlavə edilmiş zəmanət sonu tarixi.
-
-select *,
-       current_date - tarix       as kecen_gun,
-       tarix + interval '30 days' as zemanet_sonu
-from satislar
-where extract(month from tarix) in (6, 7);
-
--- task 12: Aylıq hesabat: hər ay üçün (format `AA-İİİİ`, məsələn `03-2024`) satış sayı və ümumi dövriyyə. Xronoloji sıra.
-
-select to_char(date_trunc('month', tarix), 'MM-YYYY') as ay,
-       count(*)                                       as satis_sayi,
-       sum(qiymet * miqdar)                           as umumi_dovriyye
-from satislar
-group by date_trunc('month', tarix)
-order by date_trunc('month', tarix);
-
--- task 13: Satışların həftənin günü üzrə paylanmasını çıxarın: gün nömrəsi, satış sayı və dövriyyə.
-
-select extract(isodow from tarix) as hefte,
-       count(*)                   as satis_sayi,
-       sum(qiymet * miqdar)       as umumi_dovriyye
-from satislar
-group by extract(isodow from tarix)
-order by extract(isodow from tarix);
-
--- task 14: Bir sətirdə göstərin: ilk və son satış tarixi, aralarındakı gün fərqi, ümumi satış sayı və bir aya düşən orta dövriyyə.
-
-select min(tarix)                                                   as ilk_satis_tarixi,
-       max(tarix)                                                   as son_satis_tarixi,
-       max(tarix)::date - min(tarix)::date                          as gun_ferqi,
-       count(*)                                                     as satis_sayi,
-       round(
-               sum(qiymet * miqdar)
-                   / count(distinct date_trunc('month', tarix)), 2) as aya_dusen_orta_dovriyye
-from satislar;
-
--- task 15: Bir sorğuda göstərin: `endirim_faiz`-in xam qiyməti, null-un 0-a çevrilmiş variantı, 0 olduqda null qaytaran variantı və şəhərin null-suz variantı.
-
-select *,
-       endirim_faiz               as xam_deyer,
-       coalesce(endirim_faiz, 0)  as null_0,
-       nullif(endirim_faiz, 0)    as sifir_null,
-       coalesce(seher, 'NAMELUM') as seher_namelumsuz
-from satislar;
-
--- task 16: Hər satış üçün: qiymətin mətn tipinə çevrilmiş variantı, `satis_id-məhsul` kodu (məs. `1-noutbuk`) və satışdan 2024-12-31-ə qədər neçə gün qaldığı.
-
-select *,
-       qiymet::varchar                                 as qiymet_str,
-       satis_id::varchar || '-' || upper(trim(mehsul)) as satis_kod,
-       '2024-12-31'::date - tarix                      as qalan_gun
-from satislar;
-
--- task 17: Hər satıcı üçün: ümumi satış sayı, endirimi qeyd olunmuş (null olmayan) satışların sayı, həqiqətən endirim tətbiq edilmiş (0-dan böyük) satışların sayı və sonuncunun faizi. Faizə görə azalan sıra.
-
-select upper(trim(satici))                                                   as satici,
-       count(*)                                                              as umumi_satis,
-       count(*) filter (where endirim_faiz is not null)                      as qeyd_olunmus_endirim,
-       count(*) filter (where endirim_faiz > 0)                              as tetbiq_edilmis_endirim,
-       round(count(*) filter (where endirim_faiz > 0) * 100.0 / count(*), 2) as endirim_faizi
-from satislar
-group by upper(trim(satici))
-order by endirim_faizi desc;
-
--- task 18: Qiymətə görə kateqoriya təyin edin: 1000 və yuxarı → `bahali`, 300–999 → `orta`, qalanı → `ucuz`. Qiymətə görə azalan sıra.
-
-select *,
-       case
-           when qiymet >= 1000 then 'Bahali'
-           when qiymet >= 300 then 'Orta'
-           else 'Ucuz'
-           end as qiymet_kateqoriya
-from satislar
-order by qiymet desc;
-
--- task 19: Endirim statusu sütunu yazın: null və ya 0 → `endirim yoxdur`, 15 və yuxarı → `boyuk endirim`, qalanı → `kicik endirim`.
-
-select *,
-       case
-           when endirim_faiz is null or endirim_faiz = 0 then 'Endirim yoxdur'
-           when endirim_faiz >= 15 then 'Boyuk endirim'
-           else 'Kicik endirim'
-           end as endirim_kateqoriya
-from satislar;
-
--- task 20: Tək sorğu, tək sətir nəticə: ümumi satış sayı, Texnika satışlarının sayı, Aksesuar satışlarının sayı. WHERE istifadə etmək olmaz.
-
-select count(*)                                            as umumi_satis,
-       count(case when kateqoriya = 'Texnika' then 1 end)  as texnika_sayi,
-       count(case when kateqoriya = 'Aksesuar' then 1 end) as aksesuar_sayi
-from satislar;
-
--- task 21: Ümumi statistika (bir sətir): satış sayı, şəhəri boş olmayan sətirlərin sayı, fərqli satıcı sayı, ümumi dövriyyə, orta qiymət, ən ucuz və ən bahalı qiymət.
-
-select count(*)                       as satis_sayi,
-       count(seher)                   as seher_sayi,
-       count(distinct satici)         as ferqli_satici_sayi,
-       round(sum(qiymet * miqdar), 2) as umumi_dovriyye,
-       round(avg(qiymet), 2)          as orta_qiymet,
-       round(min(qiymet), 2)          as en_ucuz,
-       round(max(qiymet), 2)          as en_bahali
-from satislar;
-
--- task 22: Şəhər üzrə satış sayı və dövriyyə. Şəhəri null olan satış `namelum` adı altında görünsün. Dövriyyəyə görə azalan sıra.
-
-select coalesce(upper(trim(seher)), 'Namelum') as seher,
-       count(*)                                as satis_sayi,
-       round(sum(qiymet * miqdar), 2)          as umumi_dovriyye
-from satislar
-group by coalesce(upper(trim(seher)), 'Namelum')
-order by umumi_dovriyye desc;
-
--- task 23: Satıcı üzrə hesabat: yalnız qiyməti 50-dən böyük satışlar nəzərə alınsın, qruplaşdırmadan sonra isə yalnız dövriyyəsi 5000-dən çox olan satıcılar qalsın.
-
-select upper(trim(satici))            as satici,
-       count(*)                       as satis_sayi,
-       round(sum(qiymet * miqdar), 2) as umumi_dovriyye
-from satislar
-where qiymet > 50
-group by upper(trim(satici))
-having sum(qiymet * miqdar) > 5000
-order by satici;
-
--- task 24: Eyni məhsul müxtəlif qiymətlərə satılıb. Hər məhsul üçün (təmizlənmiş ad) satış sayı, ən ucuz, ən bahalı qiymət və aralarındakı fərq. Yalnız birdən çox dəfə satılan məhsullar. Fərqə görə azalan sıra.
-
-select upper(trim(mehsul))                      as mehsul,
-       count(*)                                 as satis_sayi,
-       round(min(qiymet), 2)                    as en_az_qiymet,
-       round(max(qiymet), 2)                    as en_cox_qiymet,
-       round(abs(max(qiymet) - min(qiymet)), 2) as qiymet_ferqi
-from satislar
-group by upper(trim(mehsul))
-having count(*) > 1
-order by qiymet_ferqi desc;
-
--- task 25: Hər şəhər üçün orada satılan məhsulların vergüllə ayrılmış siyahısını bir sətirdə çıxarın (təkrarsız, böyük hərflərlə).
-
-select coalesce(upper(trim(seher)), 'Namelum')                                     as seher,
-       string_agg(distinct upper(trim(mehsul)), ', ' order by upper(trim(mehsul))) as mehsullar
-from satislar
-group by coalesce(upper(trim(seher)), 'Namelum');
-
--- task 26: Bütün satışları qiymətə görə azalan sıralayın və üç sütun əlavə edin: `row_number()`, `rank()`, `dense_rank()`.
-
-select *,
-       row_number() over (order by qiymet desc) as row_,
-       rank() over (order by qiymet desc)       as rank_,
-       dense_rank() over (order by qiymet desc) as dense_rank_
-from satislar
-order by qiymet desc;
-
--- task 27: Hər şəhərin daxilində satışları məbləğə görə sıralayın (null şəhər `namelum` qrupuna düşsün).
-
-select coalesce(upper(trim(seher)), 'Namelum') as seher,
-       satis_id,
-       qiymet * miqdar                         as mebleg,
-       row_number() over (partition by coalesce(upper(trim(seher)), 'Namelum')
-           order by qiymet * miqdar desc)      as rn
-from satislar
-order by seher, mebleg desc;
-
-
--- task 28: Hər satışın ümumi dövriyyədə neçə faiz pay tutduğunu hesablayın. Ümumi cəm `sum(...) over ()` ilə alınmalıdır — group by istifadə etmək olmaz, nəticədə 18 sətir qalmalıdır.
-
-select *,
-       round((qiymet * miqdar) / sum(qiymet * miqdar) over () * 100, 2) as dovriyye_faizi
-from satislar;
-
--- task 29: Tarix sırası ilə: hər satışın məbləği, əvvəlki və sonrakı satışın məbləği, aralarındakı fərq və yığılan (running) cəm.
-
-select *,
-       qiymet * miqdar                                                           as mebleg,
-       lag(qiymet * miqdar) over (order by tarix)                                as evvelki_mebleg,
-       lead(qiymet * miqdar) over (order by tarix)                               as sonraki_mebleg,
-       round((qiymet * miqdar) - lag(qiymet * miqdar) over (order by tarix), 2)  as mebleg_ferqi_evvelki,
-       round((qiymet * miqdar) - lead(qiymet * miqdar) over (order by tarix), 2) as mebleg_ferqi_sonraki,
-       sum(qiymet * miqdar) over (order by tarix)                                as running_cem
-from satislar
-order by tarix;
-
--- task 30: Satışları məbləğə görə 4 bərabər qrupa (çeyrəyə) bölün və hər satışın hansı çeyrəyə düşdüyünü göstərin.
-
-select *,
-       ntile(4) over (order by qiymet * miqdar desc) as quartile
-from satislar;
-
--- task 31: İkinci ən bahalı satışı tapın. LIMIT və ya OFFSET istifadə etmək qadağandır.
-
-select *
-from (select *,
-             dense_rank() over (order by qiymet desc) as rank_
-      from satislar) t
-where t.rank_ = 2;
-
--- task 32: Hər satıcının ən böyük məbləğli satışını tapın — satıcı başına yalnız 1 sətir. Məbləğə görə azalan sıra.
-
-select *
-from (select *,
-             round(qiymet * miqdar, 2)                                                          as mebleg,
-             row_number() over (partition by upper(trim(satici)) order by qiymet * miqdar desc) as rank_
-      from satislar) t
-where rank_ = 1
-order by mebleg desc;
-
--- task 33: Tarix sırası ilə baxdıqda ardıcıl iki satış arasında ən böyük düşüş hansı tarixdə baş verib? Tarixi, məbləği, əvvəlki məbləği və fərqi göstərin (yalnız 1 sətir).
-
-select t.tarix,
-       t.mebleg,
-       t.evvelki_mebleg,
-       t.mebleg_ferqi_evvelki
-from (select *,
-             round(qiymet * miqdar, 2)                                                as mebleg,
-             lag(qiymet * miqdar) over (order by tarix)                               as evvelki_mebleg,
-             round((qiymet * miqdar) - lag(qiymet * miqdar) over (order by tarix), 2) as mebleg_ferqi_evvelki
-      from satislar) t
-where t.mebleg_ferqi_evvelki < 0
-order by t.mebleg_ferqi_evvelki
-limit 1;
-
--- task 34: Aydan-aya artım faizi: hər ay üçün dövriyyə, əvvəlki ayın dövriyyəsi və artım faizi (1 rəqəm). İlk ayda faiz NULL olmalıdır.
-
-select t.ay,
-       t.umumi_dovriyye,
-       lag(t.umumi_dovriyye) over (order by t.ay)                                       as evvelki_dovriyye,
-       round((t.umumi_dovriyye - lag(t.umumi_dovriyye) over (order by t.ay))
-                 / lag(t.umumi_dovriyye) over (order by t.ay) * 100, 1)::varchar || '%' as artim_faizi
-from (select to_char(date_trunc('month', tarix), 'MM-YYYY') as ay,
-             round(sum(qiymet * miqdar), 2)                 as umumi_dovriyye
-      from satislar
-      group by ay
-      order by ay) t;
-
--- task 35: Hər ayın ilk satışını tapın: ay, satis_id, tarix və məhsul adı (7 sətir).
-
-select t.ay, t.satis_id, t.tarix, t.mehsul
-from (select to_char(date_trunc('month', tarix), 'MM-YYYY') as ay,
-             row_number() over (
-                 partition by to_char(date_trunc('month', tarix), 'MM-YYYY')
-                 order by tarix
-                 )                                          as ay_sira,
-             satis_id,
-             tarix,
-             coalesce(initcap(trim(mehsul)), 'NAMELUM')     as mehsul
-      from satislar
-      order by tarix) t
-where t.ay_sira = 1;
-
--- task 36: Satışları məbləğə görə azalan sıralayın və ümumi dövriyyənin 50%-ni doldurmaq üçün kifayət edən ən böyük satışları tapın (Pareto təhlili). Hər sətirdə yığılan cəm və onun faizi də görünsün.
-
-select t.*, round(t.yigilan_cem / t.umumi_cem * 100, 2) as yigilan_faiz
-from (select *,
-             round(qiymet * miqdar, 2)                                 as mebleg,
-             sum(qiymet * miqdar) over (order by qiymet * miqdar desc) as yigilan_cem,
-             sum(qiymet * miqdar) over ()                              as umumi_cem
-      from satislar) t
-where (t.yigilan_cem - t.mebleg) / t.umumi_cem < 0.5
-order by t.mebleg desc;
-
--- task 37: Hər şəhərin ümumi dövriyyədəki faiz payını hesablayın. Şərt: sorğuda həm GROUP BY, həm də pəncərə funksiyası eyni anda işlədilməlidir (alt-sorğu olmadan).
-
-select coalesce(initcap(trim(seher)), 'NAMELUM')                                                as seher,
-       sum(qiymet * miqdar)                                                                     as seher_dovriyye,
-       round(sum(qiymet * miqdar) / sum(sum(qiymet * miqdar)) over () * 100, 2)::varchar || '%' as seher_faizi
-from satislar
-group by coalesce(initcap(trim(seher)), 'NAMELUM');
-
--- task 38: Hər satıcının satışları arasında ən uzun fasilə (gün ilə) hansı olub? Ən uzun 3 fasiləni göstərin: satıcı, əvvəlki tarix, sonrakı tarix, fasilə.
-
-select *
-from (select initcap(trim(satici))                                        as satici,
-             lag(tarix) over (partition by satici order by tarix)         as evvelki_tarix,
-             tarix                                                        as sonraki_tarix,
-             tarix - lag(tarix) over (partition by satici order by tarix) as fasile
-      from satislar) t
-where evvelki_tarix is not null
-order by fasile desc
-limit 3;
-
--- task 39: Qiyməti öz şəhərinin orta qiymətindən yüksək olan satışları tapın. Nəticədə şəhər, satis_id, qiymət və həmin şəhərin orta qiyməti göstərilsin.
-
-select t.seher_adi as seher, t.satis_id, t.qiymet, round(t.seher_orta_qiymet, 2) as seher_orta_qiymet
-from (select *,
-             coalesce(initcap(trim(seher)), 'NAMELUM')                                 as seher_adi,
-             avg(qiymet) over (partition by coalesce(initcap(trim(seher)), 'NAMELUM')) as seher_orta_qiymet
-      from satislar) t
-where t.qiymet > t.seher_orta_qiymet;
-
--- task 40: Yekun hesabat. Satıcılar üzrə bir sorğuda: adı böyük hərflərlə, satış sayı, endirim çıxıldıqdan sonrakı xalis dövriyyə (2 rəqəm), orta qiymət (1 rəqəm) və status — brut dövriyyə 6000+ → `Ulduz`, 5000+ → `Yaxsi`, qalanı → `Zeif`. Yalnız 3 və daha çox satışı olan satıcılar, xalis dövriyyəyə görə azalan sıra.
-
-select coalesce(upper(trim(satici)), 'NAMELUM')                                 as satici_name,
-       count(*)                                                                 as satis_sayi,
-       round(sum(qiymet * miqdar * (1 - coalesce(endirim_faiz, 0) / 100.0)), 2) as xalis_dovriyye,
-       round(avg(qiymet), 1)                                                    as orta_qiymet,
-       case
-           when sum(qiymet * miqdar) >= 6000 then 'Ulduz'
-           when sum(qiymet * miqdar) >= 5000 then 'Yaxsi'
-           else 'Zeif'
-           end                                                                  as status
-from satislar
-group by satici_name
-having count(*) >= 3
-order by xalis_dovriyye desc;
+INSERT INTO satis_log
+SELECT i,
+       (random() * 20000)::int + 1, 'Mehsul ' || (i % 5000),
+       (ARRAY['Texnika', 'Aksesuar', 'Ofis', 'Mebel', 'Kitab'])[(i % 5) + 1],
+ (ARRAY['Bakı','Gəncə','Sumqayıt','Şəki','Lənkəran'])[(i % 5) + 1],
+ CASE WHEN i % 97 = 0 THEN 'legv' ELSE 'tamam'
+END
+,
+ (random() * 10)::int + 1,
+ (random() * 5000 + 10)::numeric(12, 2),
+ DATE '2022-01-01' + (i % 1000)
+FROM generate_series(1, 300000) AS i;
+ANALYZE
+satis_log;
+
+
+-- =====================================================================
+-- A. Cədvəl açarları və NOT NULL (1–5, 10 bal)
+-- =====================================================================
+
+-- 1-ci tapşırıq (2 bal)
+-- kateqoriya cədvəli: id avtomatik artan açar (pk_kateqoriya), ad VARCHAR(50) NOT NULL.
+
+
+
+-- 2-ci tapşırıq (2 bal)
+-- mehsul cədvəli: id (açar), ad, kateqoriya_id, qiymet, anbarda_say, aktiv.
+-- Yalnız PRIMARY KEY və NOT NULL (ad, qiymet).
+
+
+
+-- 3-cü tapşırıq (2 bal)
+-- musteri cədvəli: id (açar), ad, soyad, email NOT NULL; telefon NULL ola bilər; qeydiyyat_tarixi DATE.
+
+
+
+-- 4-cü tapşırıq (2 bal)
+-- sifaris_detal cədvəli: kompozit açar (sifaris_id, mehsul_id); say, vahid_qiymet.
+
+
+
+-- 5-ci tapşırıq (2 bal)
+-- pg_indexes-dən magaza sxemindəki bütün indeksləri çıxaran sorğu.
+
+-- İzah (nəticə niyə boş deyil + PK ilə UNIQUE+NOT NULL fərqi):
+
+
+-- =====================================================================
+-- B. Təkrarsızlıq — UNIQUE (6–9, 8 bal)
+-- =====================================================================
+
+-- 6-cı tapşırıq (2 bal)
+-- musteri.email üçün ALTER TABLE ilə adlandırılmış UNIQUE; təkrar email ilə test.
+
+-- Xəta mesajı:
+
+
+-- 7-ci tapşırıq (2 bal)
+-- mehsul: (kateqoriya_id, ad) cütü üzrə UNIQUE; hər iki halın testi.
+
+
+
+-- 8-ci tapşırıq (2 bal)
+-- musteri.telefon üzrə UNIQUE; iki NULL telefon testi + NULLS NOT DISTINCT variantı.
+
+-- İzah:
+
+
+-- 9-cu tapşırıq (2 bal)
+-- Hər kateqoriyada yalnız bir aktiv məhsul — partial unique index.
+
+
+-- =====================================================================
+-- C. Dəyər yoxlamaları — CHECK (10–14, 10 bal)
+-- =====================================================================
+
+-- 10-cu tapşırıq (2 bal)
+-- mehsul: iki adlandırılmış CHECK (qiymet > 0, anbarda_say >= 0) + pozan INSERT-lər.
+
+-- Xəta mesajları:
+
+
+-- 11-ci tapşırıq (2 bal)
+-- musteri.email CHECK: @ və nöqtə var, uzunluq > 5, boşluq yoxdur.
+
+
+
+-- 12-ci tapşırıq (2 bal)
+-- mehsul.endirimli_qiymet sütunu + cədvəl səviyyəsində CHECK (0 <= endirimli_qiymet <= qiymet).
+
+
+
+-- 13-cü tapşırıq (2 bal)
+-- sifaris cədvəli: status yalnız 4 dəyərdən biri; status = 'legv' olduqda legv_sebebi NOT NULL.
+
+
+
+-- 14-cü tapşırıq (2 bal)
+-- endirimli_qiymet NULL olduqda CHECK niyə keçir; NULL-u da bloklayan həll.
+
+-- İzah (üç dəyərli məntiq — TRUE / FALSE / UNKNOWN):
+
+
+-- =====================================================================
+-- D. Standart və hesablanan dəyərlər (15–17, 6 bal)
+-- =====================================================================
+
+-- 15-ci tapşırıq (2 bal)
+-- DEFAULT: musteri.qeydiyyat_tarixi, mehsul.anbarda_say, mehsul.aktiv, sifaris.status.
+
+
+
+-- 16-cı tapşırıq (2 bal)
+-- İki INSERT: biri sütunsuz, biri açıq NULL ilə.
+
+-- İzah (fərqin səbəbi):
+
+
+-- 17-ci tapşırıq (2 bal)
+-- sifaris_detal.cemi — GENERATED ALWAYS AS (say * vahid_qiymet) STORED + əl ilə UPDATE cəhdi.
+
+-- Nəticə:
+
+
+-- =====================================================================
+-- E. Cədvəllərarası bağlar — FOREIGN KEY (18–20, 6 bal)
+-- =====================================================================
+
+-- 18-ci tapşırıq (2 bal)
+-- İki adlandırılmış FK: mehsul.kateqoriya_id -> kateqoriya.id, sifaris.musteri_id -> musteri.id + səhv INSERT.
+
+
+
+-- 19-cu tapşırıq (2 bal)
+-- Üç silinmə davranışı: CASCADE, RESTRICT, SET NULL — hər biri üçün ayrıca test.
+
+-- Nəticələr:
+
+
+-- 20-ci tapşırıq (2 bal)
+-- musteri.devet_eden_id — özünə istinad edən FK (DEFERRABLE INITIALLY DEFERRED);
+-- bir-birini dəvət edən iki müştəri tək tranzaksiyada.
+
+
+-- =====================================================================
+-- F. Məhdudiyyətlərin idarə olunması (21–25, 10 bal)
+-- =====================================================================
+
+-- 21-ci tapşırıq (2 bal)
+-- Problemli (NULL) sətirləri tapan sorğu -> düzəliş -> mehsul.anbarda_say NOT NULL.
+
+
+
+-- 22-ci tapşırıq (2 bal)
+-- Qiymət CHECK-ini silib yenisi ilə əvəz etmək (0 < qiymet < 100000);
+-- eyni ALTER TABLE-də mümkündürmü — yoxlayın.
+
+-- Nəticə:
+
+
+-- 23-cü tapşırıq (2 bal)
+-- NOT VALID ilə məhdudiyyət -> səhv INSERT-lərlə sübut -> köhnə sətirlərin düzəlişi -> VALIDATE CONSTRAINT.
+
+-- İzah (NOT VALID ilə VALIDATE fərqi):
+
+
+-- 24-cü tapşırıq (2 bal)
+-- FK yoxlanışını müvəqqəti dayandırmağın iki yolu.
+
+-- Risklərin müqayisəsi:
+
+
+-- 25-ci tapşırıq (2 bal)
+-- Audit sorğusu: cədvəl adı, məhdudiyyət adı, oxunaqlı tip, tam tərif; cədvəl adına görə sıralı.
+
+
+-- =====================================================================
+-- G. İndekslər — əsaslar (26–30, 10 bal)
+-- Bütün işlər satis_log üzərində. Hər ölçmədən əvvəl: ANALYZE satis_log;
+-- Ölçmə cədvəlləri hesabat.md faylındadır.
+-- =====================================================================
+
+-- 26-cı tapşırıq (2 bal)
+-- WHERE mehsul_adi = 'Mehsul 4321' — EXPLAIN (ANALYZE, BUFFERS) indekssiz və indeksli.
+
+-- İzah:
+
+
+-- 27-ci tapşırıq (2 bal)
+-- (kateqoriya, tarix) kompozit indeksi; üç sorğu: (a) kateqoriya, (b) tarix, (c) hər ikisi.
+
+-- İzah (sol prefiks qaydası):
+
+
+-- 28-ci tapşırıq (2 bal)
+-- UNIQUE məhdudiyyət vs UNIQUE INDEX: yaratmaq, pg_constraint/pg_indexes-də axtarmaq, DROP CONSTRAINT cəhdi.
+
+-- İzah:
+
+
+-- 29-cu tapşırıq (2 bal)
+-- WHERE status = 'legv' — tam indeks vs partial indeks; ölçü və sürət müqayisəsi.
+
+-- İzah (partial indeks nə vaxt məqsədəuyğundur):
+
+
+-- 30-cu tapşırıq (2 bal)
+-- WHERE UPPER(mehsul_adi) = 'MEHSUL 100' — indeks niyə işləmir; iki fərqli həll və ölçmə.
+
+-- İzah:
+
+
+-- =====================================================================
+-- H. Çətin və qarışıq tapşırıqlar (31–40, 40 bal)
+-- =====================================================================
+
+-- 31-ci tapşırıq (4 bal)
+-- SELECT seher, tarix ... WHERE seher = 'Gəncə' — Index Only Scan, Heap Fetches = 0.
+
+-- İzah:
+
+
+-- 32-ci tapşırıq (4 bal)
+-- ORDER BY mebleg DESC LIMIT 20 — planda Sort olmamalı; sonra NULLS LAST variantı.
+
+-- İzah:
+
+
+-- 33-cü tapşırıq (4 bal)
+-- Hesabat: satis_log indeksləri — ölçü, cədvələ nisbət (%), tərif; ölçüyə görə azalan.
+
+-- Ən «bahalı» indeks:
+
+
+-- 34-cü tapşırıq (4 bal)
+-- pg_stat_reset() -> 5–6 SELECT -> indeks skan sayları; idx_scan = 0 olanlar.
+
+-- İzah:
+
+
+-- 35-ci tapşırıq (4 bal)
+-- WHERE mehsul_adi LIKE '%hsul 4321%' — B-tree niyə kömək etmir; GIN + pg_trgm həlli və ölçmə.
+
+-- İzah:
+
+
+-- 36-cı tapşırıq (4 bal)
+-- İndeksin yazma qiyməti: (a) indekssiz 100 000 INSERT, (b) 5 indekslə eyni INSERT.
+
+-- Fərq (%) və nəticə:
+
+
+-- 37-ci tapşırıq (4 bal)
+-- satis_log-a PRIMARY KEY; satis_qeyd cədvəli (FK, 200 000 sətir);
+-- FK sütununda indekssiz və indeksli silinmə vaxtı.
+
+-- İzah (PostgreSQL FK sütununa avtomatik indeks yaradırmı):
+
+
+-- 38-ci tapşırıq (4 bal)
+-- WHERE kateqoriya = 'Ofis' AND seher = 'Bakı' — (a) iki ayrı indeks, (b) kompozit indeks.
+
+-- İzah (BitmapAnd, hansı daha sürətli və niyə):
+
+
+-- 39-cu tapşırıq (4 bal)
+-- İndeks ölçüsü -> cədvəlin ~40%-i UPDATE -> ölçü yenidən; n_dead_tup; REINDEX.
+
+-- İzah (bloat, MVCC, ölü sətirlər):
+
+
+-- 40-cı tapşırıq (4 bal)
+-- Yekun audit: cədvəl adı, təxmini sətir sayı, cədvəl ölçüsü, indeks sayı, indekslərin ümumi ölçüsü,
+-- PK var/yoxdur, status (Problemli / Nezaret lazimdir / Normal); cədvəl ölçüsünə görə azalan.
+

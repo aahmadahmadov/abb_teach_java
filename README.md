@@ -1,252 +1,215 @@
-# SQL Funksiyaları — Praktik Tapşırıq
+# SQL Məhdudiyyətləri və İndekslər — Praktik Tapşırıq
 
-**Skalyar · Aqreqat · Pəncərə funksiyaları — 40 sorğu yazma tapşırığı**
+**Constraints · Indexes · İcra planının təhlili — 40 tapşırıq**
 
-**Mühit:** PostgreSQL · **Tapşırıq sayı:** 40 · **Maksimal bal:** 100 · **Tövsiyə olunan vaxt:** 120 dəqiqə
+Mühit: PostgreSQL 15+ · Tapşırıq sayı: 40 · Maksimal bal: 100 · Tövsiyə olunan vaxt: 120 dəqiqə
 
-Ad, Soyad: `______________________________`  Qrup: `____________`  Tarix: `____________`
+Ad, Soyad: ______________________________ Qrup: ____________ Tarix: ____________
 
-## Qaydalar
+**Qaydalar.** Hər tapşırığın cavabı işlək SQL kodudur. Yaratdığınız hər məhdudiyyətə açıq ad verin — prefikslər: pk_, uq_, chk_, fk_, indekslər üçün idx_. Sistem tərəfindən verilən ada güvənmək olmaz. G və H bölmələrində yalnız kod kifayət deyil: EXPLAIN nəticəsi və 1–2 cümləlik izah da tələb olunur; izahsız cavab yarım bal alır. Sintaktik xəta olan kod 0 bal alır. Cavabları tək .sql faylında, hər tapşırığın üstündə `-- 1-ci tapşırıq` şəklində şərhlə təhvil verin; ölçmə nəticələrini ayrıca hesabat faylına yazın.
 
-Hər tapşırığın cavabı işlək bir SQL sorğusu olmalıdır. **JOIN istifadə etmək qadağandır** — bütün suallar tək `satislar` cədvəli üzərində həll olunur. Sütunlara mənalı ləqəb (`AS`) verilməlidir. Sintaktik xəta olan sorğu 0 bal alır. Cavabları tək `.sql` faylında, hər sorğunun üstündə `-- 1-ci tapşırıq` şəklində şərhlə təhvil verin.
+## Hazırlıq — 1. İş sahəsi
 
-## Hazırlıq — cədvəli yaradın
-
-Aşağıdakı skripti olduğu kimi icra edin:
+A–F bölmələrində cədvəlləri özünüz yaradacaqsınız. Bunun üçün təmiz bir sxem açın.
 
 ```sql
-DROP TABLE IF EXISTS satislar;
-
-CREATE TABLE satislar
-(
-    satis_id      INT PRIMARY KEY,
-    mehsul        VARCHAR(50),
-    kateqoriya    VARCHAR(30),
-    seher         VARCHAR(30),
-    satici        VARCHAR(50),
-    miqdar        INT,
-    qiymet        NUMERIC(10, 2),
-    endirim_faiz  NUMERIC(5, 2),
-    tarix         DATE
-);
-
-INSERT INTO satislar (satis_id, mehsul, kateqoriya, seher, satici, miqdar, qiymet, endirim_faiz, tarix)
-VALUES (1, ' noutbuk ', 'Texnika', 'Bakı', 'aysel memmedova', 2, 1250.00, 10.00, DATE '2024-01-15'),
-       (2, 'MONITOR', 'Texnika', 'Bakı', 'aysel memmedova', 3, 320.50, NULL, DATE '2024-01-28'),
-       (3, 'klaviatura', 'Aksesuar', 'Gəncə', 'RAUF ELIYEV', 5, 45.90, 0.00, DATE '2024-02-05'),
-       (4, 'Printer', 'Texnika', 'Sumqayıt', 'nigar huseynova', 1, 480.00, 5.00, DATE '2024-02-17'),
-       (5, 'telefon ', 'Texnika', 'Bakı', 'Elvin Qasimov', 4, 899.99, 15.00, DATE '2024-03-03'),
-       (6, 'tablet', 'Texnika', 'Gəncə', 'RAUF ELIYEV', 2, 640.00, NULL, DATE '2024-03-11'),
-       (7, 'kamera', 'Texnika', 'Bakı', 'aysel memmedova', 1, 1250.00, NULL, DATE '2024-03-22'),
-       (8, ' kabel', 'Aksesuar', 'Sumqayıt', 'nigar huseynova', 10, 12.50, 0.00, DATE '2024-04-02'),
-       (9, 'MONITOR', 'Texnika', 'Şəki', 'Elvin Qasimov', 2, 320.50, NULL, DATE '2024-04-14'),
-       (10, 'noutbuk', 'Texnika', 'Gəncə', 'RAUF ELIYEV', 1, 1799.00, 20.00, DATE '2024-04-25'),
-       (11, 'klaviatura', 'Aksesuar', 'Bakı', 'Elvin Qasimov', 6, 45.90, NULL, DATE '2024-05-06'),
-       (12, 'Telefon', 'Texnika', 'Sumqayıt', 'nigar huseynova', 3, 899.99, NULL, DATE '2024-05-19'),
-       (13, 'kabel', 'Aksesuar', 'Bakı', 'aysel memmedova', 8, 12.50, 0.00, DATE '2024-06-01'),
-       (14, 'printer', 'Texnika', NULL, 'Elvin Qasimov', 2, 480.00, 10.00, DATE '2024-06-12'),
-       (15, 'kamera', 'Texnika', 'Gəncə', 'RAUF ELIYEV', 1, 1150.00, NULL, DATE '2024-06-23'),
-       (16, 'tablet ', 'Texnika', 'Bakı', 'nigar huseynova', 4, 640.00, 25.00, DATE '2024-07-04'),
-       (17, 'MONITOR ', 'Texnika', 'Sumqayıt', 'aysel memmedova', 5, 299.00, NULL, DATE '2024-07-15'),
-       (18, 'qulaqliq', 'Aksesuar', 'Bakı', 'Elvin Qasimov', 7, 89.90, 5.00, DATE '2024-07-27');
+CREATE SCHEMA IF NOT EXISTS magaza;
+SET search_path TO magaza, public;
+-- İcra vaxtını görmək üçün (psql-də):
+\timing on
+-- Planları oxunaqlı saxlamaq üçün paralelliyi söndürün:
+SET max_parallel_workers_per_gather = 0;
 ```
 
-## Cədvəlin məzmunu
+## Hazırlıq — 2. İndeks bölmələri üçün cədvəl
 
-| satis_id | mehsul | kateqoriya | seher | satici | miqdar | qiymet | endirim_faiz | tarix |
-|---|---|---|---|---|---|---|---|---|
-| 1 | `" noutbuk "` | Texnika | Bakı | aysel memmedova | 2 | 1250.00 | 10.00 | 2024-01-15 |
-| 2 | `"MONITOR"` | Texnika | Bakı | aysel memmedova | 3 | 320.50 | NULL | 2024-01-28 |
-| 3 | `"klaviatura"` | Aksesuar | Gəncə | RAUF ELIYEV | 5 | 45.90 | 0.00 | 2024-02-05 |
-| 4 | `"Printer"` | Texnika | Sumqayıt | nigar huseynova | 1 | 480.00 | 5.00 | 2024-02-17 |
-| 5 | `"telefon "` | Texnika | Bakı | Elvin Qasimov | 4 | 899.99 | 15.00 | 2024-03-03 |
-| 6 | `"tablet"` | Texnika | Gəncə | RAUF ELIYEV | 2 | 640.00 | NULL | 2024-03-11 |
-| 7 | `"kamera"` | Texnika | Bakı | aysel memmedova | 1 | 1250.00 | NULL | 2024-03-22 |
-| 8 | `" kabel"` | Aksesuar | Sumqayıt | nigar huseynova | 10 | 12.50 | 0.00 | 2024-04-02 |
-| 9 | `"MONITOR"` | Texnika | Şəki | Elvin Qasimov | 2 | 320.50 | NULL | 2024-04-14 |
-| 10 | `"noutbuk"` | Texnika | Gəncə | RAUF ELIYEV | 1 | 1799.00 | 20.00 | 2024-04-25 |
-| 11 | `"klaviatura"` | Aksesuar | Bakı | Elvin Qasimov | 6 | 45.90 | NULL | 2024-05-06 |
-| 12 | `"Telefon"` | Texnika | Sumqayıt | nigar huseynova | 3 | 899.99 | NULL | 2024-05-19 |
-| 13 | `"kabel"` | Aksesuar | Bakı | aysel memmedova | 8 | 12.50 | 0.00 | 2024-06-01 |
-| 14 | `"printer"` | Texnika | NULL | Elvin Qasimov | 2 | 480.00 | 10.00 | 2024-06-12 |
-| 15 | `"kamera"` | Texnika | Gəncə | RAUF ELIYEV | 1 | 1150.00 | NULL | 2024-06-23 |
-| 16 | `"tablet "` | Texnika | Bakı | nigar huseynova | 4 | 640.00 | 25.00 | 2024-07-04 |
-| 17 | `"MONITOR "` | Texnika | Sumqayıt | aysel memmedova | 5 | 299.00 | NULL | 2024-07-15 |
-| 18 | `"qulaqliq"` | Aksesuar | Bakı | Elvin Qasimov | 7 | 89.90 | 5.00 | 2024-07-27 |
+Aşağıdakı skripti olduğu kimi icra edin. G və H bölmələri bu cədvəl üzərində həll olunur.
 
-**Məlumatın üç xüsusiyyəti:**
+```sql
+DROP TABLE IF EXISTS satis_log;
+CREATE TABLE satis_log
+(
+ id INT,
+ musteri_kodu INT,
+ mehsul_adi VARCHAR(80),
+ kateqoriya VARCHAR(30),
+ seher VARCHAR(30),
+ status VARCHAR(20),
+ miqdar INT,
+ mebleg NUMERIC(12, 2),
+ tarix DATE
+);
+INSERT INTO satis_log
+SELECT i,
+ (random() * 20000)::int + 1,
+ 'Mehsul ' || (i % 5000),
+ (ARRAY['Texnika','Aksesuar','Ofis','Mebel','Kitab'])[(i % 5) + 1],
+ (ARRAY['Bakı','Gəncə','Sumqayıt','Şəki','Lənkəran'])[(i % 5) + 1],
+ CASE WHEN i % 97 = 0 THEN 'legv' ELSE 'tamam' END,
+ (random() * 10)::int + 1,
+ (random() * 5000 + 10)::numeric(12, 2),
+ DATE '2022-01-01' + (i % 1000)
+FROM generate_series(1, 300000) AS i;
+ANALYZE satis_log;
+```
 
-1. `mehsul` sütunu səliqəsizdir — artıq boşluqlar və qarışıq hərf registri var.
-2. `endirim_faiz`-də həm NULL, həm 0 var — bunlar eyni şey deyil.
-3. Bir satışda (`satis_id = 14`) `seher` NULL-dur.
+Bu cədvəlin üç xüsusiyyəti:
+- satis_log-da heç bir məhdudiyyət və heç bir indeks yoxdur — PRIMARY KEY belə yoxdur.
+- status sütununun təxminən 99%-i 'tamam'-dır — seçiciliyi (selectivity) çox aşağıdır.
+- mehsul_adi cəmi 5 000 təkrarsız dəyərdən ibarətdir və 300 000 sətirə paylanıb.
 
----
+## A. Cədvəl açarları və NOT NULL
 
-## A. Mətn (string) funksiyaları
+*PRIMARY KEY · NOT NULL · IDENTITY / SERIAL · kompozit açar*
 
-`UPPER` · `LOWER` · `TRIM` · `LENGTH` · `LEFT` · `SUBSTRING` · `POSITION` · `CONCAT`
+**1.** kateqoriya cədvəlini yaradın: id — avtomatik artan və cədvəlin açarı, ad — VARCHAR(50), boş ola bilməz. Açara açıq ad verin: pk_kateqoriya. (2 bal)
+İpucu: `GENERATED ALWAYS AS IDENTITY` və `CONSTRAINT pk_kateqoriya PRIMARY KEY (id)`.
 
-**1.** Hər satış üçün satis_id, məhsul adının boşluqsuz və böyük hərflərlə yazılışı, həmin adın hərf sayı və ilk 3 hərfi göstərilən sorğunu yazın. Nəticə satis_id üzrə sıralansın. *(2 bal)*
-> **İpucu:** TRIM olmadan LENGTH səhv nəticə verəcək.
+**2.** mehsul cədvəlini yaradın: id (açar), ad, kateqoriya_id, qiymet NUMERIC(10,2), anbarda_say INT, aktiv BOOLEAN. ad və qiymet boş ola bilməz. Hələlik yalnız PRIMARY KEY və NOT NULL yazın. (2 bal)
 
-**2.** Cədvəldəki təkrarsız məhsul adlarını çıxarın. Səliqəsizlik təmizlənməlidir — `' noutbuk '` ilə `'noutbuk'` eyni sayılsın. Əlifba sırası ilə. *(2 bal)*
-> **İpucu:** DISTINCT + TRIM + UPPER.
+**3.** musteri cədvəlini yaradın: id (açar), ad, soyad, email — üçü də boş ola bilməz; telefon boş qala bilər; qeydiyyat_tarixi DATE. (2 bal)
 
-**3.** Hər satış üçün `MƏHSUL / Şəhər` formatında etiket sütunu düzəldin. Şəhər NULL olduqda etiketdə `NAMELUM` yazılsın. *(2 bal)*
-> **İpucu:** CONCAT və ya `||`, üstəgəl COALESCE.
+**4.** sifaris_detal cədvəlini yaradın. Açar tək sütun deyil: sifaris_id və mehsul_id birlikdə açarı təşkil etsin. Əlavə sütunlar: say, vahid_qiymet. (2 bal)
+İpucu: Kompozit açar yalnız cədvəl səviyyəsində yazılır: `PRIMARY KEY (sifaris_id, mehsul_id)`.
 
-**4.** Satıcıların təkrarsız siyahısını çıxarın və `satici` sütununu ad və soyad olmaqla iki sütuna bölün. *(2 bal)*
-> **İpucu:** `POSITION(' ' IN satici)` boşluğun yerini verir; sonra LEFT və SUBSTRING.
+**5.** Yaratdığınız cədvəllərin bütün indekslərini pg_indexes-dən çıxaran sorğu yazın. Siz heç bir indeks yaratmamısınız, amma nəticə boş deyil — niyə? PRIMARY KEY ilə UNIQUE + NOT NULL arasındakı fərqi bir cümlə ilə yazın. (2 bal)
+İpucu: `WHERE schemaname = 'magaza'`. PK məhdudiyyət, indeks isə onun icra mexanizmidir.
 
-**5.** Hər satış üçün anbar kodu yaradın: məhsulun ilk 3 hərfi (böyük) - satışın ayı - 3 rəqəmli `satis_id`. Nümunə: `NOU-01-001`. *(2 bal)*
-> **İpucu:** LEFT + UPPER + `TO_CHAR(tarix,'MM')` + LPAD.
+## B. Təkrarsızlıq — UNIQUE
 
-## B. Ədədi (numeric) funksiyalar
+*UNIQUE · kompozit UNIQUE · NULL davranışı · partial unique index*
 
-`ROUND` · `CEILING` · `FLOOR` · `ABS` · `MOD` · `SQRT` · `POWER`
+**6.** musteri.email təkrarlanmasın. Cədvəli yenidən yaratmadan, ALTER TABLE ilə adlandırılmış UNIQUE məhdudiyyət əlavə edin. Sonra eyni email ilə ikinci müştəri yazmağa çalışın və xəta mesajını qeyd edin. (2 bal)
 
-**6.** Hər satış üçün ümumi məbləği (`qiymet * miqdar`), onun 18% ƏDV-ni (2 rəqəmə yuvarlaqlaşdırılmış), qiymətin yuxarı və aşağı yuvarlaqlaşdırılmış variantını hesablayın. Ümumi məbləğə görə azalan sıra. *(2 bal)*
-> **İpucu:** ROUND, CEILING, FLOOR.
+**7.** mehsul cədvəlində eyni kateqoriyada eyni adlı iki məhsul olmasın, lakin fərqli kateqoriyalarda eyni ad işlənə bilsin. Məhdudiyyəti qurun və hər iki halı test edin. (2 bal)
+İpucu: Tək sütuna deyil, sütun cütünə qoyulan UNIQUE.
 
-**7.** Hər satış üçün: `miqdar`-ın 2-yə bölünməsindən qalıq, `miqdar`-ın 5-dən fərqinin modulu və qiymətin kvadrat kökü (2 rəqəm). *(2 bal)*
-> **İpucu:** MOD (və ya `%`), ABS, SQRT.
+**8.** musteri.telefon sütununa UNIQUE qoyun, sonra telefonu NULL olan iki müştəri əlavə edin. Sorğu keçirmi? Nəticəni izah edin və hər iki NULL-u da təkrar sayan variantı yazın. (2 bal)
+İpucu: Standart davranışda NULL heç nəyə bərabər deyil, hətta özünə də. PostgreSQL 15+ üçün: `UNIQUE NULLS NOT DISTINCT`.
 
-**8.** Ödəniləcək məbləği hesablayın: `qiymet * miqdar` üzərinə `endirim_faiz` tətbiq olunsun. Endirim NULL olarsa 0 kimi qəbul edilsin. Azalan sıra. *(2 bal)*
-> **İpucu:** COALESCE + 100.0-a bölmə (100 yox!).
+**9.** Hər kateqoriyada yalnız bir məhsul aktiv = true ola bilsin. Qeyri-aktiv məhsulların sayı isə məhdudlaşdırılmasın. Adi UNIQUE bunu həll etmir. (2 bal)
+İpucu: `CREATE UNIQUE INDEX ... ON mehsul(kateqoriya_id) WHERE aktiv`.
 
-**9.** Məbləği bütün satışların orta məbləğindən böyük olan satışları tapın. Orta məbləğ sorğunun içində hesablanmalıdır (əl ilə rəqəm yazmaq olmaz). *(2 bal)*
-> **İpucu:** Alt-sorğu: `WHERE ... > (SELECT AVG(...) FROM satislar)`.
+## C. Dəyər yoxlamaları — CHECK
 
-## C. Tarix və zaman funksiyaları
+*CHECK · çoxsütunlu CHECK · CHECK və NULL · üç dəyərli məntiq*
 
-`EXTRACT` · `TO_CHAR` · `DATE_TRUNC` · `INTERVAL` · `AGE`
+**10.** mehsul cədvəlinə iki adlandırılmış CHECK əlavə edin: qiymet 0-dan böyük, anbarda_say mənfi olmasın. Hər ikisini pozan INSERT yazıb xəta mesajlarını qeyd edin. (2 bal)
 
-**10.** Hər satışın tarixindən il, ay və gün hissələrini ayrı sütunlarda çıxarın. *(2 bal)*
-> **İpucu:** EXTRACT.
+**11.** musteri.email üçün qayda: tərkibində @ və nöqtə olsun, uzunluğu 5 simvoldan çox olsun, boşluq olmasın. (2 bal)
+İpucu: POSITION, LENGTH və ya LIKE şablonları AND ilə birləşdirilir.
 
-**11.** Yalnız iyun və iyul aylarındakı satışlar üçün: satışın üzərindən neçə gün keçdiyi və tarixə 30 gün əlavə edilmiş zəmanət sonu tarixi. *(2 bal)*
-> **İpucu:** `CURRENT_DATE - tarix`, `tarix + INTERVAL '30 days'`.
+**12.** mehsul cədvəlinə endirimli_qiymet sütunu əlavə edin. Şərt: endirimli qiymət qiymet-dən böyük ola bilməz və mənfi olmamalıdır. (2 bal)
+İpucu: İki sütunu eyni anda yoxlayan CHECK sütun səviyyəsində yazıla bilməz.
 
-**12.** Aylıq hesabat: hər ay üçün (format `AA-İİİİ`, məsələn `03-2024`) satış sayı və ümumi dövriyyə. Xronoloji sıra. *(2 bal)*
-> **İpucu:** TO_CHAR göstərmək üçün, DATE_TRUNC sıralamaq üçün.
+**13.** sifaris cədvəlini yaradın: status yalnız gozleyir, gonderilib, catdirilib, legv dəyərlərindən biri ola bilsin. Əlavə şərt: status legv olduqda legv_sebebi mütləq doldurulsun. (2 bal)
+İpucu: `CHECK (status <> 'legv' OR legv_sebebi IS NOT NULL)` — şərti implikasiya kimi düşünün.
 
-**13.** Satışların həftənin günü üzrə paylanmasını çıxarın: gün nömrəsi, satış sayı və dövriyyə. *(2 bal)*
-> **İpucu:** `EXTRACT(DOW FROM tarix)` — 0 bazar günüdür.
+**14.** 12-ci tapşırıqdakı CHECK var, lakin endirimli_qiymet sütununa NULL yazanda sorğu keçir. Səbəbini üç dəyərli məntiqlə (TRUE / FALSE / UNKNOWN) izah edin və NULL-u da bloklayan düzgün həlli yazın. (2 bal)
+İpucu: CHECK yalnız nəticə açıq-aydın FALSE olduqda sətri rədd edir.
 
-**14.** Bir sətirdə göstərin: ilk və son satış tarixi, aralarındakı gün fərqi, ümumi satış sayı və bir aya düşən orta dövriyyə. *(2 bal)*
-> **İpucu:** MIN/MAX + `COUNT(DISTINCT DATE_TRUNC('month', tarix))`.
+## D. Standart və hesablanan dəyərlər
 
-## D. Çevirmə və NULL funksiyaları
+*DEFAULT · DEFAULT və açıq NULL · GENERATED ALWAYS AS ... STORED*
 
-`CAST` · `COALESCE` · `NULLIF` · `COUNT(sutun)` fərqi
+**15.** Standart dəyərləri qurun: musteri.qeydiyyat_tarixi → cari tarix, mehsul.anbarda_say → 0, mehsul.aktiv → true, sifaris.status → 'gozleyir'. (2 bal)
 
-**15.** Bir sorğuda göstərin: `endirim_faiz`-in xam qiyməti, NULL-un 0-a çevrilmiş variantı, 0 olduqda NULL qaytaran variantı və şəhərin NULL-suz variantı. *(2 bal)*
-> **İpucu:** COALESCE + NULLIF birlikdə.
+**16.** İki müştəri əlavə edin: birində qeydiyyat_tarixi sütununu ümumiyyətlə yazmayın, digərində isə açıq şəkildə NULL yazın. Nəticələr fərqlidir — səbəbini izah edin. (2 bal)
+İpucu: DEFAULT yalnız sütun sorğuda iştirak etmədikdə işə düşür.
 
-**16.** Hər satış üçün: qiymətin mətn tipinə çevrilmiş variantı, `satis_id-MƏHSUL` kodu (məs. `1-NOUTBUK`) və satışdan 2024-12-31-ə qədər neçə gün qaldığı. *(2 bal)*
-> **İpucu:** CAST (və ya `::`), CONCAT, tarixlərin fərqi.
+**17.** sifaris_detal cədvəlinə cemi sütunu əlavə edin — dəyəri say * vahid_qiymet kimi avtomatik hesablansın və saxlanılsın. Sonra bu sütuna əl ilə UPDATE etməyə çalışın və nəticəni qeyd edin. (2 bal)
+İpucu: `GENERATED ALWAYS AS (say * vahid_qiymet) STORED`.
 
-**17.** Hər satıcı üçün: ümumi satış sayı, endirimi qeyd olunmuş (NULL olmayan) satışların sayı, həqiqətən endirim tətbiq edilmiş (0-dan böyük) satışların sayı və sonuncunun faizi. Faizə görə azalan sıra. *(2 bal)*
-> **İpucu:** `COUNT(*)` / `COUNT(sutun)` / `COUNT(*) FILTER (WHERE ...)` üçünün fərqi.
+## E. Cədvəllərarası bağlar — FOREIGN KEY
 
-## E. Şərti ifadələr — CASE
+*FOREIGN KEY · ON DELETE CASCADE / RESTRICT / SET NULL · self-reference · DEFERRABLE*
 
-`CASE WHEN` · `SUM(CASE ...)` · CASE ORDER BY-da
+**18.** İki adlandırılmış xarici açar qurun: mehsul.kateqoriya_id → kateqoriya.id və sifaris.musteri_id → musteri.id. Mövcud olmayan kateqoriya_id ilə məhsul əlavə etməyə çalışın. (2 bal)
 
-**18.** Qiymətə görə kateqoriya təyin edin: 1000 və yuxarı → `Bahali`, 300–999 → `Orta`, qalanı → `Ucuz`. Qiymətə görə azalan sıra. *(2 bal)*
-> **İpucu:** Şərtlər yuxarıdan aşağı yoxlanır.
+**19.** Üç fərqli silinmə davranışı qurun və hər birini ayrıca test edin: sifaris_detal.sifaris_id → CASCADE, sifaris_detal.mehsul_id → RESTRICT, mehsul.kateqoriya_id → SET NULL. Hər halda valideyn sətri silib nəticəni yazın. (2 bal)
 
-**19.** Endirim statusu sütunu yazın: NULL və ya 0 → `Endirim yoxdur`, 15 və yuxarı → `Boyuk endirim`, qalanı → `Kicik endirim`. *(2 bal)*
-> **İpucu:** NULL şərtini birinci yoxlayın.
+**20.** musteri cədvəlinə devet_eden_id sütunu əlavə edin — həmin cədvələ istinad etsin (özünə istinad edən açar). Sonra bir-birini dəvət etmiş iki müştərini tək tranzaksiyada əlavə edin. (2 bal)
+İpucu: Adi FK ilə mümkün deyil — DEFERRABLE INITIALLY DEFERRED lazımdır. Yoxlama COMMIT anına təxirə salınır.
 
-**20.** Tək sorğu, tək sətir nəticə: ümumi satış sayı, Texnika satışlarının sayı, Aksesuar satışlarının sayı. WHERE istifadə etmək olmaz. *(2 bal)*
-> **İpucu:** `SUM(CASE WHEN ... THEN 1 ELSE 0 END)`.
+## F. Məhdudiyyətlərin idarə olunması
 
-## F. Aqreqat funksiyalar, GROUP BY, HAVING
+*ALTER TABLE · DROP CONSTRAINT · NOT VALID · VALIDATE · pg_constraint*
 
-`COUNT` · `SUM` · `AVG` · `MIN` · `MAX` · `STRING_AGG` · `HAVING`
+**21.** mehsul.anbarda_say sütununu məcburi (NOT NULL) edin. Cədvəldə NULL dəyərlər varsa xəta alacaqsınız — əvvəlcə problemli sətirləri tapan sorğu yazın, onları düzəldin, sonra məhdudiyyəti tətbiq edin. (2 bal)
 
-**21.** Ümumi statistika (bir sətir): satış sayı, şəhəri boş olmayan sətirlərin sayı, fərqli satıcı sayı, ümumi dövriyyə, orta qiymət, ən ucuz və ən bahalı qiymət. *(2 bal)*
-> **İpucu:** `COUNT(*)` ilə `COUNT(seher)` fərqi burada görünməlidir.
+**22.** mehsul üzərindəki qiymət CHECK-ini silin və yerinə yenisini qoyun: qiymət 0-dan böyük və 100 000-dən kiçik olsun. Silmə və əlavə etmə eyni ALTER TABLE ifadəsində yazıla bilərmi? Yoxlayın. (2 bal)
 
-**22.** Şəhər üzrə satış sayı və dövriyyə. Şəhəri NULL olan satış `Namelum` adı altında görünsün. Dövriyyəyə görə azalan sıra. *(2 bal)*
-> **İpucu:** GROUP BY-da da COALESCE lazımdır.
+**23.** Vəziyyət: cədvəldə qaydanı pozan köhnə sətirlər var, amma yeni sətirlərə qayda tətbiq olunmalıdır. Məhdudiyyəti mövcud sətirləri yoxlamadan əlavə edin, bir neçə səhv INSERT ilə onun işlədiyini sübut edin, sonra köhnə sətirləri düzəldib məhdudiyyəti təsdiqləyin. (2 bal)
+İpucu: `ADD CONSTRAINT ... NOT VALID`, sonra `VALIDATE CONSTRAINT`. Fərqi izah edin.
 
-**23.** Satıcı üzrə hesabat: yalnız qiyməti 50-dən böyük satışlar nəzərə alınsın, qruplaşdırmadan sonra isə yalnız dövriyyəsi 5000-dən çox olan satıcılar qalsın. *(2 bal)*
-> **İpucu:** Biri WHERE, digəri HAVING olmalıdır — yerlərini dəyişməyin.
+**24.** Kütləvi məlumat yükləməsi üçün bir FK-nın yoxlanışını müvəqqəti dayandırmaq lazımdır. İki fərqli yol yazın və hər birinin risklərini bir cümlə ilə müqayisə edin. (2 bal)
+İpucu: Birinci yol — məhdudiyyəti silib yükləmədən sonra geri qaytarmaq; ikinci yol — `SET CONSTRAINTS ALL DEFERRED` tranzaksiya daxilində.
 
-**24.** Eyni məhsul müxtəlif qiymətlərə satılıb. Hər məhsul üçün (təmizlənmiş ad) satış sayı, ən ucuz, ən bahalı qiymət və aralarındakı fərq. Yalnız birdən çox dəfə satılan məhsullar. Fərqə görə azalan sıra. *(2 bal)*
-> **İpucu:** `GROUP BY UPPER(TRIM(mehsul))` + `HAVING COUNT(*) > 1`.
+**25.** Audit sorğusu. Sxeminizdəki bütün məhdudiyyətləri bir cədvəldə çıxarın: cədvəl adı, məhdudiyyət adı, tipi (p / u / c / f hərfləri Esas acar, Tekrarsiz, Yoxlama, Xarici acar kimi oxunaqlı yazılsın) və tam tərifi. Cədvəl adına görə sıralansın. (2 bal)
+İpucu: `pg_constraint` + CASE + `pg_get_constraintdef(oid)` + `conrelid::regclass`.
 
-**25.** Hər şəhər üçün orada satılan məhsulların vergüllə ayrılmış siyahısını bir sətirdə çıxarın (təkrarsız, böyük hərflərlə). *(2 bal)*
-> **İpucu:** `STRING_AGG(DISTINCT ..., ', ')`.
+## G. İndekslər — əsaslar
 
-## G. Pəncərə (window) funksiyaları
+*EXPLAIN ANALYZE · B-tree · kompozit indeks · partial index · ifadə üzrə indeks*
 
-`ROW_NUMBER` · `RANK` · `DENSE_RANK` · `NTILE` · `LAG` · `LEAD` · `SUM() OVER`
+Bu bölmədən etibarən bütün işlər satis_log cədvəli üzərində aparılır. Hər ölçmədən əvvəl `ANALYZE satis_log;` icra edin.
 
-**26.** Bütün satışları qiymətə görə azalan sıralayın və üç sütun əlavə edin: `ROW_NUMBER()`, `RANK()`, `DENSE_RANK()`. *(2 bal)*
-> **İpucu:** Bərabər qiymətlərə (1250 və 899.99) diqqət edin.
+**26.** `WHERE mehsul_adi = 'Mehsul 4321'` sorğusunu `EXPLAIN (ANALYZE, BUFFERS)` ilə ölçün, sonra indeks qurub təkrar ölçün. İki cədvəldə müqayisə edin: icra vaxtı, plan növü (Seq Scan / Index Scan) və oxunan blok sayı (shared hit/read). (2 bal)
 
-**27.** Hər şəhərin daxilində satışları məbləğə görə sıralayın (NULL şəhər `Namelum` qrupuna düşsün). *(2 bal)*
-> **İpucu:** PARTITION BY.
+**27.** (kateqoriya, tarix) üzrə kompozit indeks qurun və üç sorğunu ayrı-ayrı yoxlayın: (a) yalnız kateqoriya üzrə, (b) yalnız tarix üzrə, (c) hər ikisi üzrə. Hansında indeks işə düşmədi? Kompozit indeksdə sütun sırasının niyə vacib olduğunu izah edin. (2 bal)
+İpucu: Sol prefiks qaydası (leftmost prefix).
 
-**28.** Hər satışın ümumi dövriyyədə neçə faiz pay tutduğunu hesablayın. Ümumi cəm `SUM(...) OVER ()` ilə alınmalıdır — GROUP BY istifadə etmək olmaz, nəticədə 18 sətir qalmalıdır. *(2 bal)*
-> **İpucu:** Pəncərə funksiyası sətirləri birləşdirmir.
+**28.** UNIQUE məhdudiyyət ilə UNIQUE INDEX arasındakı fərqi praktikada göstərin: ikisini də yaradın, pg_constraint və pg_indexes-də axtarın, sonra hər birini DROP CONSTRAINT ilə silməyə çalışın. Nəticəni izah edin. (2 bal)
 
-**29.** Tarix sırası ilə: hər satışın məbləği, əvvəlki və sonrakı satışın məbləği, aralarındakı fərq və yığılan (running) cəm. *(2 bal)*
-> **İpucu:** LAG, LEAD, `SUM() OVER (ORDER BY tarix)`.
+**29.** `WHERE status = 'legv'` sorğusu üçün əvvəlcə tam indeks, sonra partial indeks qurun. İkisinin ölçüsünü və sorğu sürətini müqayisə edin. Partial indeks hansı halda məqsədəuyğundur? (2 bal)
+İpucu: `pg_size_pretty(pg_relation_size('idx_ad'))`. Məlumatın 99%-i 'tamam'-dır.
 
-**30.** Satışları məbləğə görə 4 bərabər qrupa (çeyrəyə) bölün və hər satışın hansı çeyrəyə düşdüyünü göstərin. *(2 bal)*
-> **İpucu:** `NTILE(4)`.
+**30.** `WHERE UPPER(mehsul_adi) = 'MEHSUL 100'` sorğusu 26-cı tapşırıqda qurduğunuz indeksdən istifadə etmir. Səbəbini izah edin və iki fərqli həll yazın, ikisini də ölçün. (2 bal)
+İpucu: Sütunun üzərinə funksiya tətbiq olunduqda indeks açarı ilə uyğunluq itir. Həll yollarından biri — ifadə üzrə indeks.
 
 ## H. Çətin və qarışıq tapşırıqlar
 
-Bir neçə funksiya tipini birlikdə tələb edir · alt-sorğu lazımdır
+*Index Only Scan · INCLUDE · GIN / pg_trgm · bloat · sistem kataloqları · yazma qiyməti*
 
-**31.** İkinci ən bahalı satışı tapın. LIMIT və ya OFFSET istifadə etmək qadağandır. *(4 bal)*
-> **İpucu:** Pəncərə funksiyasını alt-sorğuda hesablayıb WHERE ilə süzün. Bərabər qiymətlər var — hansı funksiya düzgündür?
+**31.** `SELECT seher, tarix FROM satis_log WHERE seher = 'Gəncə'` sorğusunu Index Only Scan ilə işlətməyə nail olun. Planda Heap Fetches sətrini tapın, dəyərini sıfıra endirin və bunun nə demək olduğunu izah edin. (4 bal)
+İpucu: INCLUDE bəndi və ya kompozit indeks; sonra `VACUUM satis_log;` — görünürlük xəritəsi yenilənməlidir.
 
-**32.** Hər satıcının ən böyük məbləğli satışını tapın — satıcı başına yalnız 1 sətir. Məbləğə görə azalan sıra. *(4 bal)*
-> **İpucu:** `PARTITION BY satici` + alt-sorğu + `WHERE r = 1`.
+**32.** `ORDER BY mebleg DESC LIMIT 20` sorğusunda sıralamanın indeks hesabına aparıldığını sübut edin — planda Sort düyünü olmamalıdır. Sonra eyni nəticəni `ORDER BY mebleg DESC NULLS LAST` üçün əldə edin. (4 bal)
+İpucu: İndeks öz sıralama qaydası ilə yaradılır: `CREATE INDEX ... (mebleg DESC NULLS LAST)`.
 
-**33.** Tarix sırası ilə baxdıqda ardıcıl iki satış arasında ən böyük düşüş hansı tarixdə baş verib? Tarixi, məbləği, əvvəlki məbləği və fərqi göstərin (yalnız 1 sətir). *(4 bal)*
-> **İpucu:** LAG + alt-sorğu + `ORDER BY ferq ASC`.
+**33.** Hesabat sorğusu: satis_log-un bütün indekslərini ölçüsü, ölçünün cədvələ nisbəti (faizlə, 1 rəqəm) və indeksin tərifi ilə birlikdə sadalayın. Ölçüyə görə azalan sıra. Ən «bahalı» indeks hansıdır? (4 bal)
+İpucu: `pg_indexes` + `pg_relation_size()` + `pg_size_pretty()`.
 
-**34.** Aydan-aya artım faizi: hər ay üçün dövriyyə, əvvəlki ayın dövriyyəsi və artım faizi (1 rəqəm). İlk ayda faiz NULL olmalıdır. *(4 bal)*
-> **İpucu:** Əvvəlcə aylıq cəmi hesablayın (CTE və ya alt-sorğu), sonra onun üzərində LAG işlədin. Aqreqat və pəncərə funksiyası eyni pillədə işləmir.
+**34.** Heç vaxt istifadə olunmayan indeksləri aşkarlayın: əvvəlcə statistikanı sıfırlayın, sonra 5–6 müxtəlif SELECT icra edin, sonra hər indeks üçün skan sayını göstərən hesabat çıxarın və `idx_scan = 0` olanları işarələyin. (4 bal)
+İpucu: `SELECT pg_stat_reset();` + `pg_stat_user_indexes`.
 
-**35.** Hər ayın ilk satışını tapın: ay, satis_id, tarix və məhsul adı (7 sətir). *(4 bal)*
-> **İpucu:** `ROW_NUMBER() OVER (PARTITION BY ay ORDER BY tarix)`.
+**35.** `WHERE mehsul_adi LIKE '%hsul 4321%'` sorğusunu sürətləndirin. Adi B-tree indeks burada kömək etmir — səbəbini izah edin və işləyən həlli qurub ölçün. (4 bal)
+İpucu: `CREATE EXTENSION pg_trgm;` + `USING GIN (mehsul_adi gin_trgm_ops)`.
 
-**36.** Satışları məbləğə görə azalan sıralayın və ümumi dövriyyənin 50%-ni doldurmaq üçün kifayət edən ən böyük satışları tapın (Pareto təhlili). Hər sətirdə yığılan cəm və onun faizi də görünsün. *(4 bal)*
-> **İpucu:** İki pəncərə funksiyası: yığılan cəm və ümumi cəm. Şərt: sətirdən əvvəlki yığılan cəm hələ 50%-i keçməmiş olsun.
+**36.** İndeksin yazma əməliyyatına qiymətini ölçün: (a) bütün indeksləri silin, 100 000 sətir INSERT edin, vaxtı qeyd edin; (b) 5 indeks qurun, əlavə etdiyiniz sətirləri silin, eyni INSERT-i təkrarlayın. Fərqi faizlə göstərin və bir cümləlik nəticə yazın. (4 bal)
 
-**37.** Hər şəhərin ümumi dövriyyədəki faiz payını hesablayın. Şərt: sorğuda həm GROUP BY, həm də pəncərə funksiyası eyni anda işlədilməlidir (alt-sorğu olmadan). *(4 bal)*
-> **İpucu:** Aqreqatın üzərinə pəncərə: `SUM(SUM(...)) OVER ()`.
+**37.** satis_log-a PRIMARY KEY əlavə edin, sonra ona FK ilə bağlı satis_qeyd cədvəli yaradıb 200 000 sətir doldurun. FK sütununa indeks qurmadan valideyn cədvəldən sətir silin və vaxtı ölçün; sonra indeks qurub təkrarlayın. PostgreSQL FK sütununa avtomatik indeks yaradırmı? (4 bal)
+İpucu: Valideyn sətri silinəndə baza uşaq cədvəldə istinadları axtarmalıdır — indeks yoxdursa bu, tam skan deməkdir.
 
-**38.** Hər satıcının satışları arasında ən uzun fasilə (gün ilə) hansı olub? Ən uzun 3 fasiləni göstərin: satıcı, əvvəlki tarix, sonrakı tarix, fasilə. *(4 bal)*
-> **İpucu:** `PARTITION BY satici` + `LAG(tarix)` + tarix fərqi.
+**38.** `WHERE kateqoriya = 'Ofis' AND seher = 'Bakı'` sorğusunu iki konfiqurasiyada müqayisə edin: (a) iki ayrı bir-sütunlu indeks, (b) bir kompozit indeks (kateqoriya, seher). Planda BitmapAnd görünürmü? Hansı variant daha sürətlidir və niyə? (4 bal)
 
-**39.** Qiyməti öz şəhərinin orta qiymətindən yüksək olan satışları tapın. Nəticədə şəhər, satis_id, qiymət və həmin şəhərin orta qiyməti göstərilsin. *(4 bal)*
-> **İpucu:** `AVG(...) OVER (PARTITION BY seher)` alt-sorğuda hesablanmalıdır — pəncərə funksiyasını birbaşa WHERE-də yazmaq olmaz.
+**39.** İndeksin ölçüsünü qeyd edin, sonra cədvəlin təxminən 40%-ni UPDATE edin və ölçüyə yenidən baxın. Ölçü niyə artdı? n_dead_tup dəyərini göstərin, REINDEX icra edib fərqi cədvəldə təqdim edin. (4 bal)
+İpucu: Şişmə (bloat), MVCC və ölü sətirlər. `pg_stat_user_tables`.
 
-**40.** Yekun hesabat. Satıcılar üzrə bir sorğuda: adı böyük hərflərlə, satış sayı, endirim çıxıldıqdan sonrakı xalis dövriyyə (2 rəqəm), orta qiymət (1 rəqəm) və status — brut dövriyyə 6000+ → `Ulduz`, 5000+ → `Yaxsi`, qalanı → `Zeif`. Yalnız 3 və daha çox satışı olan satıcılar, xalis dövriyyəyə görə azalan sıra. *(4 bal)*
-> **İpucu:** Mətn + ədədi + NULL + CASE + aqreqat + HAVING — hamısı bir sorğuda.
-
----
+**40.** Yekun audit sorğusu. Sxeminizdəki hər cədvəl üçün bir sətir: cədvəl adı, təxmini sətir sayı, cədvəl ölçüsü, indeks sayı, indekslərin ümumi ölçüsü, PRIMARY KEY-in olub-olmaması (Var / Yoxdur) və status — PK yoxdursa Problemli, indekslərin ölçüsü cədvəlin 50%-dən çoxdursa Nezaret lazimdir, qalanı Normal. Cədvəl ölçüsünə görə azalan sıra. (4 bal)
+İpucu: `pg_class` / `pg_stat_user_tables` + alt-sorğular + CASE + `pg_total_relation_size`. Məhdudiyyət, indeks, ölçü və şərti ifadələr — hamısı bir sorğuda.
 
 ## Qiymətləndirmə
 
-| Bölmə | Tapşırıqlar | Bal |
+| Bölmə | Tapşırıq | Bal |
 |---|---|---|
-| A. Mətn (string) funksiyaları | 1–5 | 10 |
-| B. Ədədi (numeric) funksiyalar | 6–9 | 8 |
-| C. Tarix və zaman funksiyaları | 10–14 | 10 |
-| D. Çevirmə və NULL funksiyaları | 15–17 | 6 |
-| E. Şərti ifadələr — CASE | 18–20 | 6 |
-| F. Aqreqat funksiyalar, GROUP BY, HAVING | 21–25 | 10 |
-| G. Pəncərə (window) funksiyaları | 26–30 | 10 |
+| A. Cədvəl açarları və NOT NULL | 1–5 | 10 |
+| B. Təkrarsızlıq — UNIQUE | 6–9 | 8 |
+| C. Dəyər yoxlamaları — CHECK | 10–14 | 10 |
+| D. Standart və hesablanan dəyərlər | 15–17 | 6 |
+| E. FOREIGN KEY | 18–20 | 6 |
+| F. Məhdudiyyətlərin idarəsi | 21–25 | 10 |
+| G. İndekslər — əsaslar | 26–30 | 10 |
 | H. Çətin və qarışıq tapşırıqlar | 31–40 | 40 |
 | **Cəmi** | **1–40** | **100** |
 
@@ -256,3 +219,10 @@ Bir neçə funksiya tipini birlikdə tələb edir · alt-sorğu lazımdır
 | 75–89 | Yaxşı |
 | 60–74 | Kafi |
 | 60-dan aşağı | Təkrar |
+
+| Bal azaldılır | Cəza |
+|---|---|
+| Kod icra olunmur / sintaktik xəta | 0 bal |
+| G–H bölməsində izah yoxdur | –50% |
+| Məhdudiyyətə ad verilməyib | –0.5 bal |
+| Kopyalanmış iş | 0 bal |
