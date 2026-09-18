@@ -270,6 +270,17 @@ values ('Kohne 1', 1, 10.00, false),
 -- 10-cu tapşırıq
 -- mehsul cədvəlinə iki adlandırılmış CHECK əlavə edin: qiymet 0-dan böyük, anbarda_say mənfi olmasın. Hər ikisini pozan INSERT yazıb xəta mesajlarını qeyd edin. (2 bal)
 
+alter table magaza.mehsul
+    add constraint chk_mehsul_qiymet check (qiymet > 0);
+alter table magaza.mehsul
+    add constraint chk_mehsul_anbarda_say check (anbarda_say >= 0);
+
+insert into magaza.mehsul (ad, kateqoriya_id, qiymet, anbarda_say)
+values ('Test Mehsul', 1, -10.00, -5);
+
+insert into magaza.mehsul (ad, kateqoriya_id, qiymet, anbarda_say)
+values ('Test Mehsul 2', 1, 10.00, -5);
+
 -- Xəta mesajları:
 
 
@@ -277,20 +288,48 @@ values ('Kohne 1', 1, 10.00, false),
 -- musteri.email üçün qayda: tərkibində @ və nöqtə olsun, uzunluğu 5 simvoldan çox olsun, boşluq olmasın. (2 bal)
 -- İpucu: POSITION, LENGTH və ya LIKE şablonları AND ilə birləşdirilir.
 
+alter table magaza.musteri
+    add constraint chk_musteri_email check (
+        position('@' in email) > 0 and
+        position('.' in email) > 0 and
+        length(email) > 5 and
+        email not like '% %'
+        );
+
 
 -- 12-ci tapşırıq
 -- mehsul cədvəlinə endirimli_qiymet sütunu əlavə edin. Şərt: endirimli qiymət qiymet-dən böyük ola bilməz və mənfi olmamalıdır. (2 bal)
 -- İpucu: İki sütunu eyni anda yoxlayan CHECK sütun səviyyəsində yazıla bilməz.
 
+alter table magaza.mehsul
+    add column endirimli_qiymet numeric(10, 2) check ( endirimli_qiymet >= 0 and
+                                                       (endirimli_qiymet is null or endirimli_qiymet <= qiymet));
 
 -- 13-cü tapşırıq
 -- sifaris cədvəlini yaradın: status yalnız gozleyir, gonderilib, catdirilib, legv dəyərlərindən biri ola bilsin. Əlavə şərt: status legv olduqda legv_sebebi mütləq doldurulsun. (2 bal)
 -- İpucu: `CHECK (status <> 'legv' OR legv_sebebi IS NOT NULL)` — şərti implikasiya kimi düşünün.
 
+create table if not exists sifaris
+(
+    id          int generated always as identity,
+    musteri_id  int,
+    status      varchar(20) check (status in ('gozleyir', 'gonderilib', 'catdirilib', 'legv')),
+    legv_sebebi varchar(100),
+    constraint pk_sifaris primary key (id),
+    constraint chk_sifaris_legv check (status <> 'legv' or legv_sebebi is not null)
+);
 
 -- 14-cü tapşırıq
 -- 12-ci tapşırıqdakı CHECK var, lakin endirimli_qiymet sütununa NULL yazanda sorğu keçir. Səbəbini üç dəyərli məntiqlə (TRUE / FALSE / UNKNOWN) izah edin və NULL-u da bloklayan düzgün həlli yazın. (2 bal)
 -- İpucu: CHECK yalnız nəticə açıq-aydın FALSE olduqda sətri rədd edir.
+
+alter table magaza.mehsul
+    drop column endirimli_qiymet;
+
+alter table magaza.mehsul
+    add column endirimli_qiymet numeric(10, 2) check (endirimli_qiymet >= 0 and
+                                                      endirimli_qiymet <= qiymet and
+                                                      mehsul.endirimli_qiymet is not null);
 
 -- İzah (üç dəyərli məntiq — TRUE / FALSE / UNKNOWN):
 
