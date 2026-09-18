@@ -385,17 +385,36 @@ values ('Null Endirim 2', 4, 100.00, NULL);
 -- 15-ci tapşırıq
 -- Standart dəyərləri qurun: musteri.qeydiyyat_tarixi → cari tarix, mehsul.anbarda_say → 0, mehsul.aktiv → true, sifaris.status → 'gozleyir'. (2 bal)
 
+create table if not exists qeydiyyat_tarixi
+(
+    id               int generated always as identity,
+    musteri_id       int,
+    qeydiyyat_tarixi date        default current_date,
+    anbarda_say      int         default 0,
+    aktiv            boolean     default true,
+    status           varchar(20) default 'gozleyir',
+    constraint pk_id primary key (id)
+);
 
 -- 16-cı tapşırıq
 -- İki müştəri əlavə edin: birində qeydiyyat_tarixi sütununu ümumiyyətlə yazmayın, digərində isə açıq şəkildə NULL yazın. Nəticələr fərqlidir — səbəbini izah edin. (2 bal)
 -- İpucu: DEFAULT yalnız sütun sorğuda iştirak etmədikdə işə düşür.
 
--- İzah (fərqin səbəbi):
+insert into magaza.musteri (ad, soyad, email)
+values ('Default', 'User', 'email1@mail.ru');
+
+insert into magaza.musteri (ad, soyad, email, qeydiyyat_tarixi)
+values ('Explicit', 'Null', 'email1@mail.ru', NULL);
+
+-- İzah (fərqin səbəbi): null deyerdi, verilmesese default isleyir
 
 
 -- 17-ci tapşırıq
 -- sifaris_detal cədvəlinə cemi sütunu əlavə edin — dəyəri say * vahid_qiymet kimi avtomatik hesablansın və saxlanılsın. Sonra bu sütuna əl ilə UPDATE etməyə çalışın və nəticəni qeyd edin. (2 bal)
 -- İpucu: `GENERATED ALWAYS AS (say * vahid_qiymet) STORED`.
+
+alter table magaza.sifaris_detal
+    add column cemi numeric(10, 2) generated always as (say * vahid_qiymet) stored;
 
 -- Nəticə:
 
