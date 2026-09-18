@@ -48,7 +48,7 @@ SELECT i,
            WHEN i % 97 = 0 THEN 'legv'
            ELSE 'tamam'
            END
-        ,
+    ,
        (random() * 10)::int + 1,
        (random() * 5000 + 10)::numeric(12, 2),
        DATE '2022-01-01' + (i % 1000)
@@ -385,28 +385,46 @@ values ('Null Endirim 2', 4, 100.00, NULL);
 -- 15-ci tapşırıq
 -- Standart dəyərləri qurun: musteri.qeydiyyat_tarixi → cari tarix, mehsul.anbarda_say → 0, mehsul.aktiv → true, sifaris.status → 'gozleyir'. (2 bal)
 
-create table if not exists qeydiyyat_tarixi
-(
-    id               int generated always as identity,
-    musteri_id       int,
-    qeydiyyat_tarixi date        default current_date,
-    anbarda_say      int         default 0,
-    aktiv            boolean     default true,
-    status           varchar(20) default 'gozleyir',
-    constraint pk_id primary key (id)
-);
+-- Cədvəllər artıq yaradılıb, ona görə mövcud sütunlara DEFAULT təyin olunur.
+alter table magaza.musteri
+    alter column qeydiyyat_tarixi set default current_date;
+
+alter table magaza.mehsul
+    alter column anbarda_say set default 0;
+
+alter table magaza.mehsul
+    alter column aktiv set default true;
+
+alter table magaza.sifaris
+    alter column status set default 'gozleyir';
+
+-- Yoxlama: DEFAULT dəyərləri information_schema-dan görünür.
+select table_name, column_name, column_default
+from information_schema.columns
+where table_schema = 'magaza'
+  and column_default is not null
+order by table_name, column_name;
 
 -- 16-cı tapşırıq
 -- İki müştəri əlavə edin: birində qeydiyyat_tarixi sütununu ümumiyyətlə yazmayın, digərində isə açıq şəkildə NULL yazın. Nəticələr fərqlidir — səbəbini izah edin. (2 bal)
 -- İpucu: DEFAULT yalnız sütun sorğuda iştirak etmədikdə işə düşür.
 
-insert into magaza.musteri (ad, soyad, email)
-values ('Default', 'User', 'email1@mail.ru');
+-- Birinci müştəri: qeydiyyat_tarixi sütunu sorğuda yoxdur.
+insert into magaza.musteri (ad, soyad, email, telefon)
+values ('Default', 'User', 'email1@mail.ru', '0503334455');
 
-insert into magaza.musteri (ad, soyad, email, qeydiyyat_tarixi)
-values ('Explicit', 'Null', 'email1@mail.ru', NULL);
+-- İkinci müştəri: qeydiyyat_tarixi sütununa açıq NULL yazılır.
+insert into magaza.musteri (ad, soyad, email, telefon, qeydiyyat_tarixi)
+values ('Explicit', 'Null', 'email2@mail.ru', '0504445566', NULL);
 
--- İzah (fərqin səbəbi): null deyerdi, verilmesese default isleyir
+select ad, soyad, qeydiyyat_tarixi
+from magaza.musteri
+where soyad in ('User', 'Null');
+
+-- Nəticə: birinci sətirdə qeydiyyat_tarixi cari tarixdir, ikincidə NULL.
+
+-- İzah (fərqin səbəbi): DEFAULT yalnız sütun INSERT-də iştirak etmədikdə işə düşür.
+-- Açıq NULL yazdıqda bu, verilmiş dəyər sayılır — baza onu DEFAULT ilə əvəz etmir.
 
 
 -- 17-ci tapşırıq
@@ -416,7 +434,21 @@ values ('Explicit', 'Null', 'email1@mail.ru', NULL);
 alter table magaza.sifaris_detal
     add column cemi numeric(10, 2) generated always as (say * vahid_qiymet) stored;
 
--- Nəticə:
+-- Test: cemi sütununu yazmırıq, özü hesablanır.
+insert into magaza.sifaris_detal (sifaris_id, mehsul_id, say, vahid_qiymet)
+values (1, 1, 3, 250.00);
+
+select sifaris_id, mehsul_id, say, vahid_qiymet, cemi
+from magaza.sifaris_detal;
+
+-- Əl ilə UPDATE cəhdi.
+update magaza.sifaris_detal
+set cemi = 1000.00
+where sifaris_id = 1;
+
+-- Nəticə: hesablanan sütuna əl ilə dəyər yazmaq mümkün deyil.
+-- ERROR: column "cemi" can only be updated to DEFAULT
+-- DETAIL: Column "cemi" is a generated column.
 
 
 -- =====================================================================
