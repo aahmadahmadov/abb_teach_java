@@ -5,6 +5,9 @@
 -- Tarix: 2026-09-15
 -- Mühit: PostgreSQL 15+
 -- Qeyd: Ölçmə nəticələri və izahlar hesabat.md faylındadır.
+-- Qeyd: Məhdudiyyəti qəsdən pozan (test məqsədli) INSERT/UPDATE/DELETE ifadələri şərhə
+-- alınıb və aldıqları xəta mesajı altlarında yazılıb — belə olanda fayl əvvəldən sonuna
+-- qədər xətasız icra olunur. Onları yoxlamaq üçün şərhdən çıxarmaq kifayətdir.
 -- =====================================================================
 
 
@@ -14,8 +17,8 @@
 
 CREATE SCHEMA IF NOT EXISTS magaza;
 SET search_path TO magaza, public;
--- İcra vaxtını görmək üçün (psql-də):
-\timing on
+-- İcra vaxtını görmək üçün (yalnız psql-də işləyir, IDE-də xəta verir):
+-- \timing on
 -- Planları oxunaqlı saxlamaq üçün paralelliyi söndürün:
 SET max_parallel_workers_per_gather = 0;
 
@@ -24,8 +27,8 @@ SET max_parallel_workers_per_gather = 0;
 -- Hazırlıq — 2. İndeks bölmələri üçün cədvəl (G və H bölmələri)
 -- =====================================================================
 
-DROP TABLE IF EXISTS satis_log;
-CREATE TABLE satis_log
+DROP TABLE IF EXISTS magaza.satis_log;
+CREATE TABLE magaza.satis_log
 (
     id           INT,
     musteri_kodu INT,
@@ -38,7 +41,7 @@ CREATE TABLE satis_log
     tarix        DATE
 );
 
-INSERT INTO satis_log
+INSERT INTO magaza.satis_log
 SELECT i,
        (random() * 20000)::int + 1,
        'Mehsul ' || (i % 5000),
@@ -53,8 +56,7 @@ SELECT i,
        (random() * 5000 + 10)::numeric(12, 2),
        DATE '2022-01-01' + (i % 1000)
 FROM generate_series(1, 300000) AS i;
-ANALYZE
-    satis_log;
+ANALYZE magaza.satis_log;
 
 
 -- =====================================================================
@@ -65,9 +67,9 @@ ANALYZE
 -- kateqoriya cədvəlini yaradın: id — avtomatik artan və cədvəlin açarı, ad — VARCHAR(50), boş ola bilməz. Açara açıq ad verin: pk_kateqoriya. (2 bal)
 -- İpucu: `GENERATED ALWAYS AS IDENTITY` və `CONSTRAINT pk_kateqoriya PRIMARY KEY (id)`.
 
-DROP TABLE IF EXISTS kateqoriya;
+DROP TABLE IF EXISTS magaza.kateqoriya;
 
-CREATE TABLE kateqoriya
+CREATE TABLE magaza.kateqoriya
 (
     id INT GENERATED ALWAYS AS IDENTITY,
     ad VARCHAR(50) NOT NULL,
@@ -78,24 +80,24 @@ SELECT conname, contype
 FROM pg_constraint
 WHERE conrelid = 'kateqoriya'::regclass;
 
-INSERT INTO kateqoriya (ad)
+INSERT INTO magaza.kateqoriya (ad)
 VALUES ('Texnika'),
        ('Aksesuar');
 
 SELECT *
-FROM kateqoriya;
+FROM magaza.kateqoriya;
 
 -- Test: ad NOT NULL olduğu üçün bu sətir xəta verir.
--- INSERT INTO kateqoriya (ad) VALUES (NULL);
+-- INSERT INTO magaza.kateqoriya (ad) VALUES (NULL);
 -- ERROR: null value in column "ad" of relation "kateqoriya" violates not-null constraint
 
 
 -- 2-ci tapşırıq
 -- mehsul cədvəlini yaradın: id (açar), ad, kateqoriya_id, qiymet NUMERIC(10,2), anbarda_say INT, aktiv BOOLEAN. ad və qiymet boş ola bilməz. Hələlik yalnız PRIMARY KEY və NOT NULL yazın. (2 bal)
 
-drop table if exists mehsul;
+drop table if exists magaza.mehsul;
 
-create table mehsul
+create table magaza.mehsul
 (
     id            int generated always as identity,
     ad            varchar(100)   not null,
@@ -110,9 +112,9 @@ create table mehsul
 -- 3-cü tapşırıq
 -- musteri cədvəlini yaradın: id (açar), ad, soyad, email — üçü də boş ola bilməz; telefon boş qala bilər; qeydiyyat_tarixi DATE. (2 bal)
 
-drop table if exists musteri;
+drop table if exists magaza.musteri;
 
-create table musteri
+create table magaza.musteri
 (
     id               int generated always as identity,
     ad               varchar(50)  not null,
@@ -127,9 +129,9 @@ create table musteri
 -- sifaris_detal cədvəlini yaradın. Açar tək sütun deyil: sifaris_id və mehsul_id birlikdə açarı təşkil etsin. Əlavə sütunlar: say, vahid_qiymet. (2 bal)
 -- İpucu: Kompozit açar yalnız cədvəl səviyyəsində yazılır: `PRIMARY KEY (sifaris_id, mehsul_id)`.
 
-drop table if exists sifaris_detal;
+drop table if exists magaza.sifaris_detal;
 
-create table sifaris_detal
+create table magaza.sifaris_detal
 (
     sifaris_id   int,
     mehsul_id    int,
@@ -160,15 +162,15 @@ WHERE schemaname = 'magaza';
 -- 6-cı tapşırıq
 -- musteri.email təkrarlanmasın. Cədvəli yenidən yaratmadan, ALTER TABLE ilə adlandırılmış UNIQUE məhdudiyyət əlavə edin. Sonra eyni email ilə ikinci müştəri yazmağa çalışın və xəta mesajını qeyd edin. (2 bal)
 
-alter table musteri
+alter table magaza.musteri
     add constraint uq_musteri_email unique (email);
 
 insert into magaza.musteri (ad, soyad, email, telefon)
 values ('Ali', 'Aliyev', 'ali@mail.ru', '0501112233');
 
 -- Test: eyni email ilə ikinci müştəri — xəta verir.
-insert into magaza.musteri (ad, soyad, email, telefon)
-values ('Vali', 'Valiyev', 'ali@mail.ru', '0502223344');
+-- insert into magaza.musteri (ad, soyad, email, telefon)
+-- values ('Vali', 'Valiyev', 'ali@mail.ru', '0502223344');
 
 -- Xəta mesajı:
 -- ERROR: duplicate key value violates unique constraint "uq_musteri_email"
@@ -179,15 +181,15 @@ values ('Vali', 'Valiyev', 'ali@mail.ru', '0502223344');
 -- mehsul cədvəlində eyni kateqoriyada eyni adlı iki məhsul olmasın, lakin fərqli kateqoriyalarda eyni ad işlənə bilsin. Məhdudiyyəti qurun və hər iki halı test edin. (2 bal)
 -- İpucu: Tək sütuna deyil, sütun cütünə qoyulan UNIQUE.
 
-alter table mehsul
+alter table magaza.mehsul
     add constraint uq_mehsul_kateqoriya_ad unique (kateqoriya_id, ad);
 
 insert into magaza.mehsul (ad, kateqoriya_id, qiymet)
 values ('Yeni Mehsul', 1, 100.00);
 
 -- 1-ci hal: eyni kateqoriyada eyni ad — xəta verir.
-insert into magaza.mehsul (ad, kateqoriya_id, qiymet)
-values ('Yeni Mehsul', 1, 150.00);
+-- insert into magaza.mehsul (ad, kateqoriya_id, qiymet)
+-- values ('Yeni Mehsul', 1, 150.00);
 
 -- Xəta mesajı:
 -- ERROR: duplicate key value violates unique constraint "uq_mehsul_kateqoriya_ad"
@@ -201,7 +203,7 @@ values ('Yeni Mehsul', 2, 120.00);
 -- musteri.telefon sütununa UNIQUE qoyun, sonra telefonu NULL olan iki müştəri əlavə edin. Sorğu keçirmi? Nəticəni izah edin və hər iki NULL-u da təkrar sayan variantı yazın. (2 bal)
 -- İpucu: Standart davranışda NULL heç nəyə bərabər deyil, hətta özünə də. PostgreSQL 15+ üçün: `UNIQUE NULLS NOT DISTINCT`.
 
-alter table musteri
+alter table magaza.musteri
     add constraint uq_musteri_telefon unique (telefon);
 
 insert into magaza.musteri (ad, soyad, email, telefon)
@@ -220,15 +222,15 @@ delete
 from magaza.musteri
 where soyad = 'User2';
 
-alter table musteri
+alter table magaza.musteri
     drop constraint uq_musteri_telefon;
 
-alter table musteri
+alter table magaza.musteri
     add constraint uq_musteri_telefon unique nulls not distinct (telefon);
 
 -- Test: indi ikinci NULL telefon xəta verir.
-insert into magaza.musteri (ad, soyad, email, telefon)
-values ('Test', 'User3', 'email3@mail.ru', NULL);
+-- insert into magaza.musteri (ad, soyad, email, telefon)
+-- values ('Test', 'User3', 'email3@mail.ru', NULL);
 
 -- Xəta mesajı:
 -- ERROR: duplicate key value violates unique constraint "uq_musteri_telefon"
@@ -250,8 +252,8 @@ insert into magaza.mehsul (ad, kateqoriya_id, qiymet, aktiv)
 values ('Aktiv Mehsul', 1, 200.00, true);
 
 -- Eyni kateqoriyada ikinci aktiv məhsul — xəta verir.
-insert into magaza.mehsul (ad, kateqoriya_id, qiymet, aktiv)
-values ('Aktiv Mehsul 2', 1, 250.00, true);
+-- insert into magaza.mehsul (ad, kateqoriya_id, qiymet, aktiv)
+-- values ('Aktiv Mehsul 2', 1, 250.00, true);
 
 -- Xəta mesajı:
 -- ERROR: duplicate key value violates unique constraint "uq_mehsul_kateqoriya_aktiv"
@@ -276,12 +278,12 @@ alter table magaza.mehsul
     add constraint chk_mehsul_anbarda_say check (anbarda_say >= 0);
 
 -- Hər iki şərti pozan INSERT.
-insert into magaza.mehsul (ad, kateqoriya_id, qiymet, anbarda_say)
-values ('Test Mehsul', 1, -10.00, -5);
+-- insert into magaza.mehsul (ad, kateqoriya_id, qiymet, anbarda_say)
+-- values ('Test Mehsul', 1, -10.00, -5);
 
 -- Yalnız qiymet şərtini pozan INSERT.
-insert into magaza.mehsul (ad, kateqoriya_id, qiymet, anbarda_say)
-values ('Test Mehsul 2', 1, -10.00, 5);
+-- insert into magaza.mehsul (ad, kateqoriya_id, qiymet, anbarda_say)
+-- values ('Test Mehsul 2', 1, -10.00, 5);
 
 -- Xəta mesajları:
 -- 1) ERROR: new row for relation "mehsul" violates check constraint "chk_mehsul_anbarda_say"
@@ -317,8 +319,8 @@ alter table magaza.mehsul
         check (endirimli_qiymet >= 0 and endirimli_qiymet <= qiymet);
 
 -- Test: endirimli qiymət qiymətdən böyükdür — xəta verir.
-insert into magaza.mehsul (ad, kateqoriya_id, qiymet, endirimli_qiymet)
-values ('Endirim Test', 3, 100.00, 150.00);
+-- insert into magaza.mehsul (ad, kateqoriya_id, qiymet, endirimli_qiymet)
+-- values ('Endirim Test', 2, 100.00, 150.00);
 
 -- Xəta mesajı:
 -- ERROR: new row for relation "mehsul" violates check constraint "chk_mehsul_endirimli_qiymet"
@@ -327,9 +329,9 @@ values ('Endirim Test', 3, 100.00, 150.00);
 -- sifaris cədvəlini yaradın: status yalnız gozleyir, gonderilib, catdirilib, legv dəyərlərindən biri ola bilsin. Əlavə şərt: status legv olduqda legv_sebebi mütləq doldurulsun. (2 bal)
 -- İpucu: `CHECK (status <> 'legv' OR legv_sebebi IS NOT NULL)` — şərti implikasiya kimi düşünün.
 
-drop table if exists sifaris;
+drop table if exists magaza.sifaris;
 
-create table sifaris
+create table magaza.sifaris
 (
     id          int generated always as identity,
     musteri_id  int,
@@ -346,7 +348,7 @@ create table sifaris
 
 -- Test: endirimli_qiymet NULL olanda sətir keçir.
 insert into magaza.mehsul (ad, kateqoriya_id, qiymet, endirimli_qiymet)
-values ('Null Endirim', 4, 100.00, NULL);
+values ('Null Endirim', 2, 100.00, NULL);
 
 -- İzah (üç dəyərli məntiq — TRUE / FALSE / UNKNOWN):
 -- endirimli_qiymet NULL olanda NULL >= 0 və NULL <= qiymet müqayisələri UNKNOWN qaytarır,
@@ -370,8 +372,8 @@ alter table magaza.mehsul
                endirimli_qiymet <= qiymet);
 
 -- Test: artıq NULL keçmir.
-insert into magaza.mehsul (ad, kateqoriya_id, qiymet, endirimli_qiymet)
-values ('Null Endirim 2', 4, 100.00, NULL);
+-- insert into magaza.mehsul (ad, kateqoriya_id, qiymet, endirimli_qiymet)
+-- values ('Null Endirim 2', 2, 100.00, NULL);
 
 -- Xəta mesajı:
 -- ERROR: new row for relation "mehsul" violates check constraint "chk_mehsul_endirimli_qiymet"
@@ -442,9 +444,9 @@ select sifaris_id, mehsul_id, say, vahid_qiymet, cemi
 from magaza.sifaris_detal;
 
 -- Əl ilə UPDATE cəhdi.
-update magaza.sifaris_detal
-set cemi = 1000.00
-where sifaris_id = 1;
+-- update magaza.sifaris_detal
+-- set cemi = 1000.00
+-- where sifaris_id = 1;
 
 -- Nəticə: hesablanan sütuna əl ilə dəyər yazmaq mümkün deyil.
 -- ERROR: column "cemi" can only be updated to DEFAULT
@@ -458,17 +460,136 @@ where sifaris_id = 1;
 -- 18-ci tapşırıq
 -- İki adlandırılmış xarici açar qurun: mehsul.kateqoriya_id → kateqoriya.id və sifaris.musteri_id → musteri.id. Mövcud olmayan kateqoriya_id ilə məhsul əlavə etməyə çalışın. (2 bal)
 
+alter table magaza.mehsul
+    add constraint fk_mehsul_kateqoriya foreign key (kateqoriya_id) references magaza.kateqoriya (id);
+
+alter table magaza.sifaris
+    add constraint fk_sifaris_musteri foreign key (musteri_id) references magaza.musteri (id);
+
+-- Mövcud olmayan kateqoriya_id ilə məhsul.
+-- endirimli_qiymet 14-cü tapşırıqdan sonra NULL qəbul etmir, ona görə dəyər veririk —
+-- yoxsa sətir FK-ya çatmadan CHECK-də dayanar.
+-- insert into magaza.mehsul (ad, kateqoriya_id, qiymet, endirimli_qiymet)
+-- values ('Invalid Kateqoriya', 999, 100.00, 50.00);
+
+-- Mövcud olmayan musteri_id ilə sifariş.
+-- insert into magaza.sifaris (musteri_id, status)
+-- values (999, 'gozleyir');
+
+-- Xəta mesajları:
+-- 1) ERROR: insert or update on table "mehsul" violates foreign key constraint "fk_mehsul_kateqoriya"
+--    DETAIL: Key (kateqoriya_id)=(999) is not present in table "kateqoriya".
+-- 2) ERROR: insert or update on table "sifaris" violates foreign key constraint "fk_sifaris_musteri"
+--    DETAIL: Key (musteri_id)=(999) is not present in table "musteri".
 
 -- 19-cu tapşırıq
 -- Üç fərqli silinmə davranışı qurun və hər birini ayrıca test edin: sifaris_detal.sifaris_id → CASCADE, sifaris_detal.mehsul_id → RESTRICT, mehsul.kateqoriya_id → SET NULL. Hər halda valideyn sətri silib nəticəni yazın. (2 bal)
 
+-- 17-ci tapşırıqda əlavə edilmiş detal sətri valideynsizdir (o vaxt FK yox idi),
+-- FK qurmaq üçün əvvəlcə onu silirik.
+delete
+from magaza.sifaris_detal;
+
+alter table magaza.sifaris_detal
+    add constraint fk_sifaris_detal_sifaris foreign key (sifaris_id) references magaza.sifaris (id) on delete cascade;
+
+alter table magaza.sifaris_detal
+    add constraint fk_sifaris_detal_mehsul foreign key (mehsul_id) references magaza.mehsul (id) on delete restrict;
+
+-- fk_mehsul_kateqoriya 18-ci tapşırıqda yaradılıb, eyni adla ikinci dəfə yaratmaq olmaz —
+-- əvvəlcə silib, sonra SET NULL davranışı ilə yenidən qururuq.
+alter table magaza.mehsul
+    drop constraint fk_mehsul_kateqoriya;
+
+alter table magaza.mehsul
+    add constraint fk_mehsul_kateqoriya foreign key (kateqoriya_id) references magaza.kateqoriya (id) on delete set null;
+
+
+-- (a) CASCADE testi: sifariş silinəndə onun detalları da silinir.
+insert into magaza.sifaris (musteri_id, status)
+values ((select id from magaza.musteri where email = 'ali@mail.ru'), 'gozleyir');
+
+insert into magaza.sifaris_detal (sifaris_id, mehsul_id, say, vahid_qiymet)
+values ((select max(id) from magaza.sifaris),
+        (select id from magaza.mehsul where ad = 'Yeni Mehsul' and kateqoriya_id = 1),
+        2, 100.00);
+
+delete
+from magaza.sifaris
+where id = (select max(id) from magaza.sifaris);
+
+-- Detal sətri də silindi: nəticə 0.
+select count(*) as qalan_detal
+from magaza.sifaris_detal;
+
+
+-- (b) RESTRICT testi: detalı olan məhsulu silmək mümkün deyil.
+insert into magaza.sifaris (musteri_id, status)
+values ((select id from magaza.musteri where email = 'ali@mail.ru'), 'gozleyir');
+
+insert into magaza.sifaris_detal (sifaris_id, mehsul_id, say, vahid_qiymet)
+values ((select max(id) from magaza.sifaris),
+        (select id from magaza.mehsul where ad = 'Yeni Mehsul' and kateqoriya_id = 1),
+        2, 100.00);
+
+-- delete
+-- from magaza.mehsul
+-- where ad = 'Yeni Mehsul'
+--   and kateqoriya_id = 1;
+
+
+-- (c) SET NULL testi: kateqoriya silinəndə məhsulun kateqoriya_id-si NULL olur.
+delete
+from magaza.kateqoriya
+where ad = 'Aksesuar';
+
+select ad, kateqoriya_id
+from magaza.mehsul
+where kateqoriya_id is null;
+
+
 -- Nəticələr:
+-- (a) CASCADE — valideyn sifariş silindi, sifaris_detal sətri avtomatik silindi (qalan_detal = 0).
+-- (b) RESTRICT — silinmə baş tutmadı:
+--     ERROR: update or delete on table "mehsul" violates foreign key constraint
+--            "fk_sifaris_detal_mehsul" on table "sifaris_detal"
+--     DETAIL: Key (id)=(1) is still referenced from table "sifaris_detal".
+-- (c) SET NULL — kateqoriya sətri silindi, ona istinad edən məhsulların kateqoriya_id-si NULL oldu.
 
 
 -- 20-ci tapşırıq
 -- musteri cədvəlinə devet_eden_id sütunu əlavə edin — həmin cədvələ istinad etsin (özünə istinad edən açar). Sonra bir-birini dəvət etmiş iki müştərini tək tranzaksiyada əlavə edin. (2 bal)
 -- İpucu: Adi FK ilə mümkün deyil — DEFERRABLE INITIALLY DEFERRED lazımdır. Yoxlama COMMIT anına təxirə salınır.
 
+alter table magaza.musteri
+    add column devet_eden_id int;
+
+-- Özünə istinad edən FK. Yoxlama COMMIT anına təxirə salınır.
+alter table magaza.musteri
+    add constraint fk_musteri_devet_eden foreign key (devet_eden_id) references magaza.musteri (id)
+        deferrable initially deferred;
+
+-- Bir-birini dəvət etmiş iki müştəri tək tranzaksiyada.
+-- id GENERATED ALWAYS olduğu üçün açıq id yazmaq üçün OVERRIDING SYSTEM VALUE lazımdır.
+begin;
+
+insert into magaza.musteri (id, ad, soyad, email, telefon, devet_eden_id)
+    overriding system value
+values (9001, 'Aygun', 'Mammadova', 'aygun@mail.ru', '0505556677', 9002);
+
+insert into magaza.musteri (id, ad, soyad, email, telefon, devet_eden_id)
+    overriding system value
+values (9002, 'Kamran', 'Hesenov', 'kamran@mail.ru', '0506667788', 9001);
+
+commit;
+
+select id, ad, devet_eden_id
+from magaza.musteri
+where id in (9001, 9002);
+
+-- Nəticə: birinci INSERT hələ mövcud olmayan 9002-yə istinad edir, amma FK DEFERRABLE
+-- INITIALLY DEFERRED olduğu üçün yoxlama COMMIT anında aparılır və hər iki sətir keçir.
+-- Adi FK-da birinci INSERT dərhal xəta verərdi.
 
 -- =====================================================================
 -- F. Məhdudiyyətlərin idarə olunması (21–25, 10 bal)
@@ -505,7 +626,7 @@ where sifaris_id = 1;
 
 -- =====================================================================
 -- G. İndekslər — əsaslar (26–30, 10 bal)
--- Bütün işlər satis_log üzərində. Hər ölçmədən əvvəl: ANALYZE satis_log;
+-- Bütün işlər satis_log üzərində. Hər ölçmədən əvvəl: ANALYZE magaza.satis_log;
 -- Ölçmə cədvəlləri hesabat.md faylındadır.
 -- =====================================================================
 
@@ -547,7 +668,7 @@ where sifaris_id = 1;
 -- =====================================================================
 
 -- 31-ci tapşırıq
--- `SELECT seher, tarix FROM satis_log WHERE seher = 'Gəncə'` sorğusunu Index Only Scan ilə işlətməyə nail olun. Planda Heap Fetches sətrini tapın, dəyərini sıfıra endirin və bunun nə demək olduğunu izah edin. (4 bal)
+-- `SELECT seher, tarix FROM magaza.satis_log WHERE seher = 'Gəncə'` sorğusunu Index Only Scan ilə işlətməyə nail olun. Planda Heap Fetches sətrini tapın, dəyərini sıfıra endirin və bunun nə demək olduğunu izah edin. (4 bal)
 -- İpucu: INCLUDE bəndi və ya kompozit indeks; sonra `VACUUM satis_log;` — görünürlük xəritəsi yenilənməlidir.
 
 -- İzah:
