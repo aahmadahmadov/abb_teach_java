@@ -275,13 +275,20 @@ alter table magaza.mehsul
 alter table magaza.mehsul
     add constraint chk_mehsul_anbarda_say check (anbarda_say >= 0);
 
+-- Hər iki şərti pozan INSERT.
 insert into magaza.mehsul (ad, kateqoriya_id, qiymet, anbarda_say)
 values ('Test Mehsul', 1, -10.00, -5);
 
+-- Yalnız qiymet şərtini pozan INSERT.
 insert into magaza.mehsul (ad, kateqoriya_id, qiymet, anbarda_say)
-values ('Test Mehsul 2', 1, 10.00, -5);
+values ('Test Mehsul 2', 1, -10.00, 5);
 
 -- Xəta mesajları:
+-- 1) ERROR: new row for relation "mehsul" violates check constraint "chk_mehsul_anbarda_say"
+--    DETAIL: Failing row contains (8, Test Mehsul, 1, -10.00, -5, null).
+--    Qeyd: bu sətir hər iki şərti pozur, amma PostgreSQL yalnız ilk pozulan məhdudiyyəti göstərir.
+-- 2) ERROR: new row for relation "mehsul" violates check constraint "chk_mehsul_qiymet"
+--    DETAIL: Failing row contains (9, Test Mehsul 2, 1, -10.00, 5, null).
 
 
 -- 11-ci tapşırıq
@@ -302,20 +309,34 @@ alter table magaza.musteri
 -- İpucu: İki sütunu eyni anda yoxlayan CHECK sütun səviyyəsində yazıla bilməz.
 
 alter table magaza.mehsul
-    add column endirimli_qiymet numeric(10, 2) check ( endirimli_qiymet >= 0 and
-                                                       (endirimli_qiymet is null or endirimli_qiymet <= qiymet));
+    add column endirimli_qiymet numeric(10, 2);
+
+-- İki sütunu yoxladığı üçün CHECK cədvəl səviyyəsində yazılır və açıq ad alır.
+alter table magaza.mehsul
+    add constraint chk_mehsul_endirimli_qiymet
+        check (endirimli_qiymet >= 0 and endirimli_qiymet <= qiymet);
+
+-- Test: endirimli qiymət qiymətdən böyükdür — xəta verir.
+insert into magaza.mehsul (ad, kateqoriya_id, qiymet, endirimli_qiymet)
+values ('Endirim Test', 3, 100.00, 150.00);
+
+-- Xəta mesajı:
+-- ERROR: new row for relation "mehsul" violates check constraint "chk_mehsul_endirimli_qiymet"
 
 -- 13-cü tapşırıq
 -- sifaris cədvəlini yaradın: status yalnız gozleyir, gonderilib, catdirilib, legv dəyərlərindən biri ola bilsin. Əlavə şərt: status legv olduqda legv_sebebi mütləq doldurulsun. (2 bal)
 -- İpucu: `CHECK (status <> 'legv' OR legv_sebebi IS NOT NULL)` — şərti implikasiya kimi düşünün.
 
-create table if not exists sifaris
+drop table if exists sifaris;
+
+create table sifaris
 (
     id          int generated always as identity,
     musteri_id  int,
-    status      varchar(20) check (status in ('gozleyir', 'gonderilib', 'catdirilib', 'legv')),
+    status      varchar(20),
     legv_sebebi varchar(100),
     constraint pk_sifaris primary key (id),
+    constraint chk_sifaris_status check (status in ('gozleyir', 'gonderilib', 'catdirilib', 'legv')),
     constraint chk_sifaris_legv check (status <> 'legv' or legv_sebebi is not null)
 );
 
@@ -323,15 +344,38 @@ create table if not exists sifaris
 -- 12-ci tapşırıqdakı CHECK var, lakin endirimli_qiymet sütununa NULL yazanda sorğu keçir. Səbəbini üç dəyərli məntiqlə (TRUE / FALSE / UNKNOWN) izah edin və NULL-u da bloklayan düzgün həlli yazın. (2 bal)
 -- İpucu: CHECK yalnız nəticə açıq-aydın FALSE olduqda sətri rədd edir.
 
-alter table magaza.mehsul
-    drop column endirimli_qiymet;
-
-alter table magaza.mehsul
-    add column endirimli_qiymet numeric(10, 2) check (endirimli_qiymet >= 0 and
-                                                      endirimli_qiymet <= qiymet and
-                                                      mehsul.endirimli_qiymet is not null);
+-- Test: endirimli_qiymet NULL olanda sətir keçir.
+insert into magaza.mehsul (ad, kateqoriya_id, qiymet, endirimli_qiymet)
+values ('Null Endirim', 4, 100.00, NULL);
 
 -- İzah (üç dəyərli məntiq — TRUE / FALSE / UNKNOWN):
+-- endirimli_qiymet NULL olanda NULL >= 0 və NULL <= qiymet müqayisələri UNKNOWN qaytarır,
+-- UNKNOWN and UNKNOWN da UNKNOWN olur. CHECK sətri yalnız nəticə FALSE olduqda rədd edir,
+-- UNKNOWN isə FALSE deyil — ona görə sətir keçir.
+
+-- Həll: CHECK-ə IS NOT NULL şərtini əlavə etmək. Mövcud sətirlərdə NULL var,
+-- əvvəlcə onları doldururuq, yoxsa yeni məhdudiyyət tətbiq olunmaz.
+
+update magaza.mehsul
+set endirimli_qiymet = 0
+where endirimli_qiymet is null;
+
+alter table magaza.mehsul
+    drop constraint chk_mehsul_endirimli_qiymet;
+
+alter table magaza.mehsul
+    add constraint chk_mehsul_endirimli_qiymet
+        check (endirimli_qiymet is not null and
+               endirimli_qiymet >= 0 and
+               endirimli_qiymet <= qiymet);
+
+-- Test: artıq NULL keçmir.
+insert into magaza.mehsul (ad, kateqoriya_id, qiymet, endirimli_qiymet)
+values ('Null Endirim 2', 4, 100.00, NULL);
+
+-- Xəta mesajı:
+-- ERROR: new row for relation "mehsul" violates check constraint "chk_mehsul_endirimli_qiymet"
+-- Alternativ həll: alter column endirimli_qiymet set not null;
 
 
 -- =====================================================================
