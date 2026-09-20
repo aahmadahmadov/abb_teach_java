@@ -860,7 +860,7 @@ GROUP BY k.musteri_id;
    2) indeks quruldu  | Index Scan idx_t_musteri_cem | 2 550 000 / 1 948          | 1.16 ms
    3) ANALYZE edildi  | Index Scan idx_t_musteri_cem | 2 003 / 1 948              | 1.14 ms
 
-   Seq Scan > Index Scan keçidi vaxtı 38 dəfə azaldır, ANALYZE isə gözlənilən sətir sayını
+   Seq Scan-dan Index Scan-a keçid vaxtı 38 dəfə azaldır, ANALYZE isə gözlənilən sətir sayını
    faktiki sayın yanına gətirir. */
 
 
@@ -1100,7 +1100,7 @@ ORDER BY hesab_id;
 
 SELECT SUM(balans) AS umumi_balans
 FROM hesab;
-/* Müşahidə: 1-ci hesab 5000.00 > 4500.00, 2-ci hesab 1200.00 > 1700.00.
+/* Müşahidə: 1-ci hesab 5000.00-dan 4500.00-a düşdü, 2-ci hesab 1200.00-dan 1700.00-a qalxdı.
    Ümumi balans 6500.00 olaraq dəyişmədi, çünki iki UPDATE bir bütöv kimi icra olundu. */
 
 -- Data ilkin vəziyyətə qaytarılır
@@ -1489,9 +1489,9 @@ SHOW transaction_isolation;
 -- yəni dirty read heç vaxt baş vermir.
 COMMIT;
 /* Default səviyyələr:
-   PostgreSQL     > READ COMMITTED
-   MySQL InnoDB   > REPEATABLE READ
-   SQL Server     > READ COMMITTED */
+   PostgreSQL:    READ COMMITTED
+   MySQL InnoDB:  REPEATABLE READ
+   SQL Server:    READ COMMITTED */
 
 
 -- 43-cü tapşırıq
