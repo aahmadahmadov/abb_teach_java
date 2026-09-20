@@ -1,1352 +1,2091 @@
--- =====================================================================
--- SQL məhdudiyyətləri və indekslər: praktik tapşırıq (40 tapşırıq)
--- Ad, Soyad: Ahmad Ahmadov
--- Qrup: -
--- Tarix: 2026-09-15
--- Mühit: PostgreSQL 15+
--- Qeyd: Ölçmə nəticələri və izahlar hesabat.md faylındadır.
--- Qeyd: Məhdudiyyəti qəsdən pozan (test məqsədli) INSERT/UPDATE/DELETE ifadələri şərhə
--- alınıb və aldıqları xəta mesajı altlarında yazılıb. Belə olanda fayl əvvəldən sonuna
--- qədər xətasız icra olunur. Onları yoxlamaq üçün şərhdən çıxarmaq kifayətdir.
--- =====================================================================
+-- SQL Dərinlik Modulu, praktik tapşırıq
+-- CTE (WITH), müvəqqəti cədvəllər, tranzaksiyalar, ACID
+-- Mühit: PostgreSQL 16 (docker-compose, lesson1 bazası)
+-- Qeyd: bəzi tapşırıqlar qəsdən xəta verir, gözlənilən xəta mətni şərhdə yazılıb.
 
 
--- =====================================================================
--- Hazırlıq 1: iş sahəsi
--- =====================================================================
+-- ============================================================
+-- Hazırlıq, sxemi yaradın
+-- ============================================================
 
-CREATE SCHEMA IF NOT EXISTS magaza;
-SET search_path TO magaza, public;
--- İcra vaxtını görmək üçün (yalnız psql-də işləyir, IDE-də xəta verir):
--- \timing on
--- Planları oxunaqlı saxlamaq üçün paralelliyi söndürün:
-SET max_parallel_workers_per_gather = 0;
+-- Skript təkrar icra oluna bilsin deyə asılı obyektlər əvvəlcə silinir
+DROP MATERIALIZED VIEW IF EXISTS mv_seher_dovriyye;
+DROP VIEW IF EXISTS v_seher_dovriyye2;
+DROP VIEW IF EXISTS v_seher_dovriyye;
+DROP FUNCTION IF EXISTS kocurme(INT, INT, NUMERIC);
+DROP TABLE IF EXISTS ayliq_yekun;
 
+DROP TABLE IF EXISTS kocurme_log;
+DROP TABLE IF EXISTS satis;
+DROP TABLE IF EXISTS hesab;
+DROP TABLE IF EXISTS anbar;
+DROP TABLE IF EXISTS isci;
+DROP TABLE IF EXISTS kateqoriya;
+DROP TABLE IF EXISTS qraf;
 
--- =====================================================================
--- Hazırlıq 2: indeks bölmələri üçün cədvəl (G və H bölmələri)
--- =====================================================================
-
-DROP TABLE IF EXISTS magaza.satis_qeyd;
-DROP TABLE IF EXISTS magaza.satis_log;
-CREATE TABLE magaza.satis_log
+-- 1) Satış faktları
+CREATE TABLE satis
 (
-    id           INT,
-    musteri_kodu INT,
-    mehsul_adi   VARCHAR(80),
-    kateqoriya   VARCHAR(30),
-    seher        VARCHAR(30),
-    status       VARCHAR(20),
-    miqdar       INT,
-    mebleg       NUMERIC(12, 2),
-    tarix        DATE
+    satis_id      INT PRIMARY KEY,
+    tarix         DATE           NOT NULL,
+    seher         VARCHAR(30),
+    kateqoriya_id INT,
+    satici_id     INT,
+    musteri_id    INT,
+    mebleg        NUMERIC(10, 2) NOT NULL
 );
 
-INSERT INTO magaza.satis_log
-SELECT i,
-       (random() * 20000)::int + 1,
-       'Mehsul ' || (i % 5000),
-       (ARRAY ['Texnika', 'Aksesuar', 'Ofis', 'Mebel', 'Kitab'])[(i % 5) + 1],
-       (ARRAY ['Bakı','Gəncə','Sumqayıt','Şəki','Lənkəran'])[(i % 5) + 1],
-       CASE
-           WHEN i % 97 = 0 THEN 'legv'
-           ELSE 'tamam'
-           END
-    ,
-       (random() * 10)::int + 1,
-       (random() * 5000 + 10)::numeric(12, 2),
-       DATE '2022-01-01' + (i % 1000)
-FROM generate_series(1, 300000) AS i;
-ANALYZE magaza.satis_log;
+INSERT INTO satis
+VALUES (1, DATE '2024-01-12', 'Bakı', 100, 4, 101, 2500.00),
+       (2, DATE '2024-01-25', 'Gəncə', 20, 5, 102, 129.50),
+       (3, DATE '2024-01-30', 'Bakı', 110, 7, 103, 1799.00),
+       (4, DATE '2024-02-08', 'Sumqayıt', 101, 8, 104, 641.00),
+       (5, DATE '2024-02-14', 'Bakı', 210, 4, 101, 349.90),
+       (6, DATE '2024-02-22', 'Şəki', 100, 9, 105, 1250.00),
+       (7, DATE '2024-03-05', 'Bakı', 110, 7, 106, 899.99),
+       (8, DATE '2024-03-11', 'Gəncə', 100, 5, 102, 3598.00),
+       (9, DATE '2024-03-19', 'Sumqayıt', 21, 8, 107, 89.90),
+       (10, DATE '2024-03-28', 'Bakı', 101, 4, 103, 320.50),
+       (11, DATE '2024-04-03', NULL, 100, 9, 108, 1799.00),
+       (12, DATE '2024-04-16', 'Gəncə', 210, 5, 102, 699.80),
+       (13, DATE '2024-04-21', 'Bakı', 110, 7, 101, 2699.97),
+       (14, DATE '2024-04-29', 'Şəki', 20, 9, 105, 62.50),
+       (15, DATE '2024-06-04', 'Bakı', 100, 4, 109, 4999.00),
+       (16, DATE '2024-06-12', 'Sumqayıt', 101, 8, 104, 961.50),
+       (17, DATE '2024-06-20', 'Gəncə', 21, 5, 110, 269.70),
+       (18, DATE '2024-06-27', 'Bakı', 110, 7, 106, 1799.98),
+       (19, DATE '2024-07-02', 'Bakı', 210, 4, 103, 174.95),
+       (20, DATE '2024-07-15', 'Şəki', 100, 9, 105, 2500.00),
+       (21, DATE '2024-07-23', 'Sumqayıt', 20, 8, 107, 37.50),
+       (22, DATE '2024-08-05', 'Bakı', 101, 4, 101, 1282.00),
+       (23, DATE '2024-08-14', 'Gəncə', 110, 5, 102, 899.99),
+       (24, DATE '2024-08-27', 'Bakı', 100, 7, 109, 3750.00);
+
+-- 2) İşçi ierarxiyası
+CREATE TABLE isci
+(
+    isci_id   INT PRIMARY KEY,
+    ad        VARCHAR(50),
+    vezife    VARCHAR(40),
+    rehber_id INT REFERENCES isci (isci_id),
+    maas      NUMERIC(10, 2),
+    ise_qebul DATE
+);
+
+INSERT INTO isci
+VALUES (1, 'Aygün Məmmədova', 'Baş direktor', NULL, 9000.00, DATE '2018-02-01'),
+       (2, 'Rauf Əliyev', 'Satış direktoru', 1, 6500.00, DATE '2019-03-15'),
+       (3, 'Nigar Hüseynova', 'Texnologiya direktoru', 1, 6800.00, DATE '2019-05-20'),
+       (4, 'Elvin Qasımov', 'Satış meneceri (Bakı)', 2, 4200.00, DATE '2020-01-10'),
+       (5, 'Leyla Nəbiyeva', 'Satış meneceri (Gəncə)', 2, 4000.00, DATE '2020-06-01'),
+       (6, 'Tural Səfərov', 'Komanda lideri', 3, 4800.00, DATE '2020-09-14'),
+       (7, 'Kamran Vəliyev', 'Satıcı', 4, 2600.00, DATE '2021-02-11'),
+       (8, 'Səbinə Quliyeva', 'Satıcı', 4, 2500.00, DATE '2021-04-05'),
+       (9, 'Orxan Babayev', 'Satıcı', 5, 2400.00, DATE '2021-07-19'),
+       (10, 'Günel Rzayeva', 'Developer', 6, 3800.00, DATE '2021-11-03'),
+       (11, 'Anar Cəfərov', 'Developer', 6, 3600.00, DATE '2022-01-17'),
+       (12, 'Nərmin Əliyeva', 'Stajçı', 10, 1200.00, DATE '2023-09-01');
+
+-- 3) Kateqoriya ağacı
+CREATE TABLE kateqoriya
+(
+    kateqoriya_id INT PRIMARY KEY,
+    ad            VARCHAR(40),
+    ust_id        INT
+);
+
+INSERT INTO kateqoriya
+VALUES (1, 'Texnika', NULL),
+       (2, 'Aksesuar', NULL),
+       (10, 'Kompüter', 1),
+       (11, 'Telefon', 1),
+       (20, 'Kabel', 2),
+       (21, 'Qulaqlıq', 2),
+       (100, 'Noutbuk', 10),
+       (101, 'Monitor', 10),
+       (110, 'Smartfon', 11),
+       (210, 'Simsiz qulaqlıq', 21);
+
+-- 4) Dövrəli qraf
+CREATE TABLE qraf
+(
+    ust INT,
+    alt INT
+);
+INSERT INTO qraf
+VALUES (1, 2),
+       (2, 3),
+       (3, 4),
+       (4, 2),
+       (3, 5);
+
+-- 5) Bank hesabları
+CREATE TABLE hesab
+(
+    hesab_id INT PRIMARY KEY,
+    sahib    VARCHAR(50),
+    balans   NUMERIC(12, 2) NOT NULL CHECK (balans >= 0),
+    valyuta  CHAR(3) DEFAULT 'AZN'
+);
+
+INSERT INTO hesab
+VALUES (1, 'Aysel Məmmədova', 5000.00, 'AZN'),
+       (2, 'Rauf Əliyev', 1200.00, 'AZN'),
+       (3, 'Nigar Hüseynova', 300.00, 'AZN'),
+       (4, 'Elvin Qasımov', 0.00, 'AZN');
+
+CREATE TABLE kocurme_log
+(
+    log_id    SERIAL PRIMARY KEY,
+    hesab_id  INT,
+    emeliyyat VARCHAR(20),
+    mebleg    NUMERIC(12, 2),
+    qeyd      TEXT,
+    yaradildi TIMESTAMP DEFAULT now()
+);
+
+-- 6) Anbar
+CREATE TABLE anbar
+(
+    mehsul_id INT PRIMARY KEY,
+    ad        VARCHAR(40),
+    qaliq     INT NOT NULL CHECK (qaliq >= 0),
+    versiya   INT NOT NULL DEFAULT 1
+);
+
+INSERT INTO anbar
+VALUES (1, 'Noutbuk Pro 15', 24, 1),
+       (2, 'Monitor 27 düym', 40, 1),
+       (3, 'Simsiz qulaqlıq', 65, 1),
+       (4, 'USB-C kabel', 300, 1),
+       (5, 'Smartfon X', 18, 1);
 
 
--- =====================================================================
--- A. Cədvəl açarları və NOT NULL (1–5, 10 bal)
--- =====================================================================
+-- ============================================================
+-- A. CTE, sintaksis və işləmə məntiqi
+-- ============================================================
 
 -- 1-ci tapşırıq
--- kateqoriya cədvəlini yaradın: id — avtomatik artan və cədvəlin açarı, ad — VARCHAR(50), boş ola bilməz. Açara açıq ad verin: pk_kateqoriya. (2 bal)
--- İpucu: `GENERATED ALWAYS AS IDENTITY` və `CONSTRAINT pk_kateqoriya PRIMARY KEY (id)`.
-
-DROP TABLE IF EXISTS magaza.kateqoriya CASCADE;
-
-CREATE TABLE magaza.kateqoriya
-(
-    id INT GENERATED ALWAYS AS IDENTITY,
-    ad VARCHAR(50) NOT NULL,
-    CONSTRAINT pk_kateqoriya PRIMARY KEY (id)
-);
-
-SELECT conname, contype
-FROM pg_constraint
-WHERE conrelid = 'kateqoriya'::regclass;
-
-INSERT INTO magaza.kateqoriya (ad)
-VALUES ('Texnika'),
-       ('Aksesuar');
-
-SELECT *
-FROM magaza.kateqoriya;
-
--- Test: ad NOT NULL olduğu üçün bu sətir xəta verir.
--- INSERT INTO magaza.kateqoriya (ad) VALUES (NULL);
--- ERROR: null value in column "ad" of relation "kateqoriya" violates not-null constraint
+-- II rüb (aprel, may, iyun) satışları CTE-yə yığılır, sonra şəhər kəsiyində hesablanır.
+WITH aktiv_satis AS (SELECT satis_id,
+                            tarix,
+                            seher,
+                            mebleg
+                     FROM satis
+                     WHERE tarix >= DATE '2024-04-01'
+                       AND tarix < DATE '2024-07-01')
+SELECT COALESCE(seher, 'Namelum') AS seher,
+       COUNT(*)                   AS satis_sayi,
+       SUM(mebleg)                AS umumi_mebleg
+FROM aktiv_satis
+GROUP BY COALESCE(seher, 'Namelum')
+ORDER BY umumi_mebleg DESC;
 
 
 -- 2-ci tapşırıq
--- mehsul cədvəlini yaradın: id (açar), ad, kateqoriya_id, qiymet NUMERIC(10,2), anbarda_say INT, aktiv BOOLEAN. ad və qiymet boş ola bilməz. Hələlik yalnız PRIMARY KEY və NOT NULL yazın. (2 bal)
-
-drop table if exists magaza.mehsul cascade;
-
-create table magaza.mehsul
-(
-    id            int generated always as identity,
-    ad            varchar(100)   not null,
-    kateqoriya_id int,
-    qiymet        numeric(10, 2) not null,
-    anbarda_say   int,
-    aktiv         boolean,
-    constraint pk_mehsul primary key (id)
-);
+-- Eyni CTE iki dəfə istifadə olunur, LAG əvəzinə CTE öz-özü ilə JOIN edilir.
+WITH ayliq AS (SELECT DATE_TRUNC('month', tarix) AS ay,
+                      SUM(mebleg)                AS cem
+               FROM satis
+               GROUP BY DATE_TRUNC('month', tarix))
+SELECT a.ay::date AS ay,
+       a.cem      AS bu_ayin_cemi,
+       b.cem      AS evvelki_ayin_cemi
+FROM ayliq a
+         LEFT JOIN ayliq b ON b.ay = a.ay - INTERVAL '1 month'
+ORDER BY a.ay;
 
 
 -- 3-cü tapşırıq
--- musteri cədvəlini yaradın: id (açar), ad, soyad, email — üçü də boş ola bilməz; telefon boş qala bilər; qeydiyyat_tarixi DATE. (2 bal)
+-- CTE disk obyekti deyil, ona görə sorğu bitəndən sonra adı qalmır.
+SELECT *
+FROM aktiv_satis;
+/* Alınan xəta:
+   ERROR:  relation "aktiv_satis" does not exist
+   LINE 1: SELECT * FROM aktiv_satis;
+                         ^
+   İzah: CTE yalnız onu yazdığımız sorğunun daxilində mövcuddur, cədvəl və ya view kimi
+   bazada saxlanılmır, buna görə ayrıca əmrdə həmin ad tapılmır. */
 
-drop table if exists magaza.musteri cascade;
-
-create table magaza.musteri
-(
-    id               int generated always as identity,
-    ad               varchar(50)  not null,
-    soyad            varchar(50)  not null,
-    email            varchar(100) not null,
-    telefon          varchar(20),
-    qeydiyyat_tarixi date,
-    constraint pk_musteri primary key (id)
-);
 
 -- 4-cü tapşırıq
--- sifaris_detal cədvəlini yaradın. Açar tək sütun deyil: sifaris_id və mehsul_id birlikdə açarı təşkil etsin. Əlavə sütunlar: say, vahid_qiymet. (2 bal)
--- İpucu: Kompozit açar yalnız cədvəl səviyyəsində yazılır: `PRIMARY KEY (sifaris_id, mehsul_id)`.
+-- İç-içə subquery iki addıma bölünür, təkrarlanan aqreqasiya bir dəfə yazılır.
+WITH seher_cem AS (SELECT seher,
+                          SUM(mebleg) AS cem
+                   FROM satis
+                   GROUP BY seher),
+     orta AS (SELECT AVG(cem) AS orta_cem
+              FROM seher_cem)
+SELECT COALESCE(s.seher, 'Namelum') AS seher,
+       s.cem                        AS cem
+FROM seher_cem s
+         CROSS JOIN orta o
+WHERE s.cem > o.orta_cem
+ORDER BY s.cem DESC;
 
-drop table if exists magaza.sifaris_detal;
-
-create table magaza.sifaris_detal
-(
-    sifaris_id   int,
-    mehsul_id    int,
-    say          int,
-    vahid_qiymet numeric(12, 2),
-    constraint pk_sifaris_detal primary key (sifaris_id, mehsul_id)
-);
 
 -- 5-ci tapşırıq
--- Yaratdığınız cədvəllərin bütün indekslərini pg_indexes-dən çıxaran sorğu yazın. Siz heç bir indeks yaratmamısınız, amma nəticə boş deyil — niyə? PRIMARY KEY ilə UNIQUE + NOT NULL arasındakı fərqi bir cümlə ilə yazın. (2 bal)
--- İpucu: `WHERE schemaname = 'magaza'`. PK məhdudiyyət, indeks isə onun icra mexanizmidir.
+-- Sütun adları CTE-nin özünə verilir, daxildə heç bir AS yoxdur.
+WITH ay_cem(ay, cem, say) AS (SELECT DATE_TRUNC('month', tarix),
+                                     SUM(mebleg),
+                                     COUNT(*)
+                              FROM satis
+                              GROUP BY DATE_TRUNC('month', tarix))
+SELECT ay::date AS ay,
+       cem      AS cem,
+       say      AS say
+FROM ay_cem
+ORDER BY ay;
 
-SELECT *
-FROM pg_indexes
-WHERE schemaname = 'magaza';
 
--- İzah: PRIMARY KEY və UNIQUE məhdudiyyətləri PostgreSQL-də avtomatik unikal B-tree
--- indeks yaradır, yəni indeks məhdudiyyətin icra mexanizmidir. Ona görə CREATE INDEX
--- yazmasam da nəticədə 4 PK indeksi görünür.
--- Fərq: UNIQUE + NOT NULL eyni yoxlamanı verir, amma PK cədvəlin əsas açarıdır:
--- cədvəldə yalnız bir PK ola bilər və xarici açarlar ona istinad edir.
-
-
--- =====================================================================
--- B. Təkrarsızlıq — UNIQUE (6–9, 8 bal)
--- =====================================================================
+-- ============================================================
+-- B. Çoxlu və zəncirvari CTE
+-- ============================================================
 
 -- 6-cı tapşırıq
--- musteri.email təkrarlanmasın. Cədvəli yenidən yaratmadan, ALTER TABLE ilə adlandırılmış UNIQUE məhdudiyyət əlavə edin. Sonra eyni email ilə ikinci müştəri yazmağa çalışın və xəta mesajını qeyd edin. (2 bal)
-
-alter table magaza.musteri
-    add constraint uq_musteri_email unique (email);
-
-insert into magaza.musteri (ad, soyad, email, telefon)
-values ('Ali', 'Aliyev', 'ali@mail.ru', '0501112233');
-
--- Test: eyni email ilə ikinci müştəri xəta verir.
--- insert into magaza.musteri (ad, soyad, email, telefon)
--- values ('Vali', 'Valiyev', 'ali@mail.ru', '0502223344');
-
--- Xəta mesajı:
--- ERROR: duplicate key value violates unique constraint "uq_musteri_email"
--- DETAIL: Key (email)=(ali@mail.ru) already exists.
+-- Üç addım: aylıq dövriyyə, ayların ortası, ortadan yuxarı aylar.
+WITH ayliq AS (SELECT DATE_TRUNC('month', tarix) AS ay,
+                      SUM(mebleg)                AS dovriyye
+               FROM satis
+               GROUP BY DATE_TRUNC('month', tarix)),
+     orta AS (SELECT AVG(dovriyye) AS orta_dovriyye
+              FROM ayliq),
+     yuksek AS (SELECT a.ay,
+                       a.dovriyye,
+                       o.orta_dovriyye
+                FROM ayliq a
+                         CROSS JOIN orta o
+                WHERE a.dovriyye > o.orta_dovriyye)
+SELECT ay::date                                                   AS ay,
+       dovriyye                                                   AS dovriyye,
+       ROUND((dovriyye - orta_dovriyye) / orta_dovriyye * 100, 1) AS ortadan_faiz
+FROM yuksek
+ORDER BY ay;
 
 
 -- 7-ci tapşırıq
--- mehsul cədvəlində eyni kateqoriyada eyni adlı iki məhsul olmasın, lakin fərqli kateqoriyalarda eyni ad işlənə bilsin. Məhdudiyyəti qurun və hər iki halı test edin. (2 bal)
--- İpucu: Tək sütuna deyil, sütun cütünə qoyulan UNIQUE.
+/* Skriptdəki iki səhv:
+   1) İkinci dəfə WITH yazılıb. WITH bir dəfə yazılır, növbəti CTE-lər vergüllə ayrılır.
+      Xəta: ERROR:  syntax error at or near "WITH"
+   2) Sonuncu CTE-dən sonra vergül qoyulub. Sonuncu CTE ilə əsas SELECT arasında vergül olmur. */
 
-alter table magaza.mehsul
-    add constraint uq_mehsul_kateqoriya_ad unique (kateqoriya_id, ad);
+-- Düzəldilmiş variant:
+WITH ayliq AS (SELECT DATE_TRUNC('month', tarix) AS ay,
+                      SUM(mebleg)                AS cem
+               FROM satis
+               GROUP BY DATE_TRUNC('month', tarix)),
+     orta AS (SELECT AVG(cem) AS orta_cem
+              FROM ayliq)
+SELECT a.ay::date AS ay,
+       a.cem      AS cem
+FROM ayliq a
+         CROSS JOIN orta o
+WHERE a.cem > o.orta_cem
+ORDER BY a.ay;
 
-insert into magaza.mehsul (ad, kateqoriya_id, qiymet)
-values ('Yeni Mehsul', 1, 100.00);
-
--- 1-ci hal: eyni kateqoriyada eyni ad xəta verir.
--- insert into magaza.mehsul (ad, kateqoriya_id, qiymet)
--- values ('Yeni Mehsul', 1, 150.00);
-
--- Xəta mesajı:
--- ERROR: duplicate key value violates unique constraint "uq_mehsul_kateqoriya_ad"
--- DETAIL: Key (kateqoriya_id, ad)=(1, Yeni Mehsul) already exists.
-
--- 2-ci hal: fərqli kateqoriyada eyni ad keçir.
-insert into magaza.mehsul (ad, kateqoriya_id, qiymet)
-values ('Yeni Mehsul', 2, 120.00);
 
 -- 8-ci tapşırıq
--- musteri.telefon sütununa UNIQUE qoyun, sonra telefonu NULL olan iki müştəri əlavə edin. Sorğu keçirmi? Nəticəni izah edin və hər iki NULL-u da təkrar sayan variantı yazın. (2 bal)
--- İpucu: Standart davranışda NULL heç nəyə bərabər deyil, hətta özünə də. PostgreSQL 15+ üçün: `UNIQUE NULLS NOT DISTINCT`.
-
-alter table magaza.musteri
-    add constraint uq_musteri_telefon unique (telefon);
-
-insert into magaza.musteri (ad, soyad, email, telefon)
-values ('Test', 'User1', 'email@mail.ru', NULL);
-
-insert into magaza.musteri (ad, soyad, email, telefon)
-values ('Test', 'User2', 'email2@mail.ru', NULL);
-
--- İzah: hər iki INSERT keçir. Standart UNIQUE NULL-ları müqayisə etmir: NULL heç nəyə,
--- hətta özünə də bərabər deyil, ona görə NULL telefonların sayı məhdudlaşmır.
-
--- Hər iki NULL-u təkrar sayan variant (PostgreSQL 15+).
--- Cədvəldə artıq iki NULL telefon var, yeni məhdudiyyət onları buraxmayacaq, ona görə
--- əvvəlcə birini silirik.
-delete
-from magaza.musteri
-where soyad = 'User2';
-
-alter table magaza.musteri
-    drop constraint uq_musteri_telefon;
-
-alter table magaza.musteri
-    add constraint uq_musteri_telefon unique nulls not distinct (telefon);
-
--- Test: indi ikinci NULL telefon xəta verir.
--- insert into magaza.musteri (ad, soyad, email, telefon)
--- values ('Test', 'User3', 'email3@mail.ru', NULL);
-
--- Xəta mesajı:
--- ERROR: duplicate key value violates unique constraint "uq_musteri_telefon"
--- DETAIL: Key (telefon)=(null) already exists.
+-- Dörd addım ayrı-ayrı CTE-lərdədir: aylıq, yığılan cəm, faiz payları, Pareto işarəsi.
+WITH ayliq AS (SELECT DATE_TRUNC('month', tarix) AS ay,
+                      SUM(mebleg)                AS dovriyye
+               FROM satis
+               GROUP BY DATE_TRUNC('month', tarix)),
+     umumi AS (SELECT SUM(dovriyye) AS umumi_dovriyye
+               FROM ayliq),
+     yigilan AS (SELECT ay,
+                        dovriyye,
+                        SUM(dovriyye) OVER (ORDER BY ay) AS yigilan_cem
+                 FROM ayliq),
+     faiz AS (SELECT y.ay,
+                     y.dovriyye,
+                     y.yigilan_cem,
+                     ROUND(y.dovriyye * 100 / u.umumi_dovriyye, 1)    AS faiz_payi,
+                     ROUND(y.yigilan_cem * 100 / u.umumi_dovriyye, 1) AS yigilan_faiz
+              FROM yigilan y
+                       CROSS JOIN umumi u)
+SELECT ay::date     AS ay,
+       dovriyye     AS dovriyye,
+       yigilan_cem  AS yigilan_cem,
+       faiz_payi    AS faiz_payi,
+       yigilan_faiz AS yigilan_faiz,
+       CASE
+           WHEN yigilan_faiz >= 50 AND yigilan_faiz - faiz_payi < 50
+               THEN 'Pareto serhedi'
+           ELSE ''
+           END      AS qeyd
+FROM faiz
+ORDER BY ay;
 
 
 -- 9-cu tapşırıq
--- Hər kateqoriyada yalnız bir məhsul aktiv = true ola bilsin. Qeyri-aktiv məhsulların sayı isə məhdudlaşdırılmasın. Adi UNIQUE bunu həll etmir. (2 bal)
--- İpucu: `CREATE UNIQUE INDEX ... ON mehsul(kateqoriya_id) WHERE aktiv`.
+-- Səhv variant: birinci CTE özündən sonrakına baxmağa çalışır.
+WITH birinci AS (SELECT n FROM ikinci),
+     ikinci AS (SELECT 1 AS n)
+SELECT n AS n
+FROM birinci;
+/* Alınan xəta:
+   ERROR:  relation "ikinci" does not exist
+   DETAIL:  There is a WITH item named "ikinci", but it cannot be referenced from this part of the query.
+   HINT:  Use WITH RECURSIVE, or re-order the WITH items to remove forward references. */
 
--- Səbəb: ALTER TABLE ... ADD CONSTRAINT UNIQUE WHERE bəndi qəbul etmir, sütuna qoyulan
--- tam UNIQUE isə qeyri-aktiv məhsulların sayını da məhdudlaşdırardı.
--- Həll partial unique index-dir: yalnız aktiv = true sətirləri indeksə düşür.
-
-create unique index uq_mehsul_kateqoriya_aktiv
-    on mehsul (kateqoriya_id) where aktiv;
-
-insert into magaza.mehsul (ad, kateqoriya_id, qiymet, aktiv)
-values ('Aktiv Mehsul', 1, 200.00, true);
-
--- Eyni kateqoriyada ikinci aktiv məhsul xəta verir.
--- insert into magaza.mehsul (ad, kateqoriya_id, qiymet, aktiv)
--- values ('Aktiv Mehsul 2', 1, 250.00, true);
-
--- Xəta mesajı:
--- ERROR: duplicate key value violates unique constraint "uq_mehsul_kateqoriya_aktiv"
--- DETAIL: Key (kateqoriya_id)=(1) already exists.
-
--- Qeyri-aktiv məhsulların sayı məhdud deyil, bu ikisi keçir.
-insert into magaza.mehsul (ad, kateqoriya_id, qiymet, aktiv)
-values ('Kohne 1', 1, 10.00, false),
-       ('Kohne 2', 1, 20.00, false);
+-- Düzgün variant, CTE-lərin yeri dəyişdirilib:
+WITH ikinci AS (SELECT 1 AS n),
+     birinci AS (SELECT n FROM ikinci)
+SELECT n AS n
+FROM birinci;
+-- Qayda: CTE yalnız özündən əvvəl elan olunmuş CTE-lərə müraciət edə bilər, rekursiya istisnadır.
 
 
--- =====================================================================
--- C. Dəyər yoxlamaları — CHECK (10–14, 10 bal)
--- =====================================================================
+-- ============================================================
+-- C. Rekursiv CTE
+-- ============================================================
 
 -- 10-cu tapşırıq
--- mehsul cədvəlinə iki adlandırılmış CHECK əlavə edin: qiymet 0-dan böyük, anbarda_say mənfi olmasın. Hər ikisini pozan INSERT yazıb xəta mesajlarını qeyd edin. (2 bal)
-
-alter table magaza.mehsul
-    add constraint chk_mehsul_qiymet check (qiymet > 0);
-alter table magaza.mehsul
-    add constraint chk_mehsul_anbarda_say check (anbarda_say >= 0);
-
--- Hər iki şərti pozan INSERT.
--- insert into magaza.mehsul (ad, kateqoriya_id, qiymet, anbarda_say)
--- values ('Test Mehsul', 1, -10.00, -5);
-
--- Yalnız qiymet şərtini pozan INSERT.
--- insert into magaza.mehsul (ad, kateqoriya_id, qiymet, anbarda_say)
--- values ('Test Mehsul 2', 1, -10.00, 5);
-
--- Xəta mesajları:
--- 1) ERROR: new row for relation "mehsul" violates check constraint "chk_mehsul_anbarda_say"
---    DETAIL: Failing row contains (8, Test Mehsul, 1, -10.00, -5, null).
---    Qeyd: bu sətir hər iki şərti pozur, amma PostgreSQL yalnız ilk pozulan məhdudiyyəti göstərir.
--- 2) ERROR: new row for relation "mehsul" violates check constraint "chk_mehsul_qiymet"
---    DETAIL: Failing row contains (9, Test Mehsul 2, 1, -10.00, 5, null).
+WITH RECURSIVE ierarxiya AS (SELECT isci_id,
+                                    ad,
+                                    vezife,
+                                    1 AS seviyye
+                             FROM isci
+                             WHERE rehber_id IS NULL
+                             UNION ALL
+                             SELECT i.isci_id,
+                                    i.ad,
+                                    i.vezife,
+                                    h.seviyye + 1
+                             FROM isci i
+                                      JOIN ierarxiya h ON i.rehber_id = h.isci_id)
+SELECT isci_id AS isci_id,
+       ad      AS ad,
+       vezife  AS vezife,
+       seviyye AS seviyye
+FROM ierarxiya
+ORDER BY seviyye, ad;
 
 
 -- 11-ci tapşırıq
--- musteri.email üçün qayda: tərkibində @ və nöqtə olsun, uzunluğu 5 simvoldan çox olsun, boşluq olmasın. (2 bal)
--- İpucu: POSITION, LENGTH və ya LIKE şablonları AND ilə birləşdirilir.
-
-alter table magaza.musteri
-    add constraint chk_musteri_email check (
-        position('@' in email) > 0 and
-        position('.' in email) > 0 and
-        length(email) > 5 and
-        email not like '% %'
-        );
+-- Anchor-da yol işçinin adıdır, hər rekursiv addımda ad sona əlavə olunur.
+WITH RECURSIVE yol_agaci AS (SELECT isci_id,
+                                    ad,
+                                    1        AS seviyye,
+                                    ad::text AS yol
+                             FROM isci
+                             WHERE rehber_id IS NULL
+                             UNION ALL
+                             SELECT i.isci_id,
+                                    i.ad,
+                                    y.seviyye + 1,
+                                    y.yol || ' > ' || i.ad
+                             FROM isci i
+                                      JOIN yol_agaci y ON i.rehber_id = y.isci_id)
+SELECT ad      AS ad,
+       seviyye AS seviyye,
+       yol     AS yol
+FROM yol_agaci
+ORDER BY yol;
 
 
 -- 12-ci tapşırıq
--- mehsul cədvəlinə endirimli_qiymet sütunu əlavə edin. Şərt: endirimli qiymət qiymet-dən böyük ola bilməz və mənfi olmamalıdır. (2 bal)
--- İpucu: İki sütunu eyni anda yoxlayan CHECK sütun səviyyəsində yazıla bilməz.
+-- Anchor kökdə deyil, isci_id = 2-də başlayır. Səviyyə 0 rəhbərin özüdür, sayılmır.
+WITH RECURSIVE
+    tabeler AS (SELECT isci_id,
+                       ad,
+                       vezife,
+                       maas,
+                       0 AS seviyye
+                FROM isci
+                WHERE isci_id = 2
+                UNION ALL
+                SELECT i.isci_id,
+                       i.ad,
+                       i.vezife,
+                       i.maas,
+                       t.seviyye + 1
+                FROM isci i
+                         JOIN tabeler t ON i.rehber_id = t.isci_id),
+    yekun AS (SELECT COUNT(*)  AS isci_sayi,
+                     SUM(maas) AS maas_fondu
+              FROM tabeler
+              WHERE seviyye > 0)
+SELECT t.isci_id    AS isci_id,
+       t.ad         AS ad,
+       t.vezife     AS vezife,
+       t.seviyye    AS seviyye,
+       y.isci_sayi  AS alt_agac_isci_sayi,
+       y.maas_fondu AS alt_agac_maas_fondu
+FROM tabeler t
+         CROSS JOIN yekun y
+WHERE t.seviyye > 0
+ORDER BY t.seviyye, t.ad;
 
-alter table magaza.mehsul
-    add column endirimli_qiymet numeric(10, 2);
-
--- İki sütunu yoxladığı üçün CHECK cədvəl səviyyəsində yazılır və açıq ad alır.
-alter table magaza.mehsul
-    add constraint chk_mehsul_endirimli_qiymet
-        check (endirimli_qiymet >= 0 and endirimli_qiymet <= qiymet);
-
--- Test: endirimli qiymət qiymətdən böyükdür, ona görə xəta verir.
--- insert into magaza.mehsul (ad, kateqoriya_id, qiymet, endirimli_qiymet)
--- values ('Endirim Test', 2, 100.00, 150.00);
-
--- Xəta mesajı:
--- ERROR: new row for relation "mehsul" violates check constraint "chk_mehsul_endirimli_qiymet"
 
 -- 13-cü tapşırıq
--- sifaris cədvəlini yaradın: status yalnız gozleyir, gonderilib, catdirilib, legv dəyərlərindən biri ola bilsin. Əlavə şərt: status legv olduqda legv_sebebi mütləq doldurulsun. (2 bal)
--- İpucu: `CHECK (status <> 'legv' OR legv_sebebi IS NOT NULL)` — şərti implikasiya kimi düşünün.
+-- Aylar rekursiya ilə qurulur, generate_series işlədilmir.
+WITH RECURSIVE aylar AS (SELECT DATE '2024-01-01' AS ay
+                         UNION ALL
+                         SELECT (ay + INTERVAL '1 month')::date
+                         FROM aylar
+                         WHERE ay < DATE '2024-08-01')
+SELECT a.ay                       AS ay,
+       COALESCE(SUM(s.mebleg), 0) AS dovriyye
+FROM aylar a
+         LEFT JOIN satis s ON DATE_TRUNC('month', s.tarix)::date = a.ay
+GROUP BY a.ay
+ORDER BY a.ay;
+-- Yoxlama: 2024-05-01 sətri 0 dövriyyə ilə görünür, çünki may ayında satış yoxdur.
 
-drop table if exists magaza.sifaris;
-
-create table magaza.sifaris
-(
-    id          int generated always as identity,
-    musteri_id  int,
-    status      varchar(20),
-    legv_sebebi varchar(100),
-    constraint pk_sifaris primary key (id),
-    constraint chk_sifaris_status check (status in ('gozleyir', 'gonderilib', 'catdirilib', 'legv')),
-    constraint chk_sifaris_legv check (status <> 'legv' or legv_sebebi is not null)
-);
 
 -- 14-cü tapşırıq
--- 12-ci tapşırıqdakı CHECK var, lakin endirimli_qiymet sütununa NULL yazanda sorğu keçir. Səbəbini üç dəyərli məntiqlə (TRUE / FALSE / UNKNOWN) izah edin və NULL-u da bloklayan düzgün həlli yazın. (2 bal)
--- İpucu: CHECK yalnız nəticə açıq-aydın FALSE olduqda sətri rədd edir.
+/* (a) Qoruyucusuz variant. Bu sorğu sonsuz işləyir, çünki qraf-da 2 > 3 > 4 > 2 dövrəsi var
+   və UNION ALL dublikatları silmir. Sorğu ayrıca icra edilib Ctrl+C ilə dayandırılıb.
+   Müşahidə: nəticə gəlmir, yaddaş artır, psql-də icra dayandırılana qədər davam edir.
 
--- Test: endirimli_qiymet NULL olanda sətir keçir.
-insert into magaza.mehsul (ad, kateqoriya_id, qiymet, endirimli_qiymet)
-values ('Null Endirim', 2, 100.00, NULL);
+   WITH RECURSIVE ag AS (SELECT ust, alt FROM qraf WHERE ust = 1
+                         UNION ALL
+                         SELECT q.ust, q.alt FROM qraf q JOIN ag ON q.ust = ag.alt)
+   SELECT ust, alt FROM ag;
+*/
 
--- İzah (üç dəyərli məntiq: TRUE / FALSE / UNKNOWN):
--- endirimli_qiymet NULL olanda NULL >= 0 və NULL <= qiymet müqayisələri UNKNOWN qaytarır,
--- UNKNOWN and UNKNOWN da UNKNOWN olur. CHECK sətri yalnız nəticə FALSE olduqda rədd edir,
--- UNKNOWN isə FALSE deyil, ona görə sətir keçir.
-
--- Həll: CHECK-ə IS NOT NULL şərtini əlavə etmək. Mövcud sətirlərdə NULL var,
--- əvvəlcə onları doldururuq, yoxsa yeni məhdudiyyət tətbiq olunmaz.
-
-update magaza.mehsul
-set endirimli_qiymet = 0
-where endirimli_qiymet is null;
-
-alter table magaza.mehsul
-    drop constraint chk_mehsul_endirimli_qiymet;
-
-alter table magaza.mehsul
-    add constraint chk_mehsul_endirimli_qiymet
-        check (endirimli_qiymet is not null and
-               endirimli_qiymet >= 0 and
-               endirimli_qiymet <= qiymet);
-
--- Test: artıq NULL keçmir.
--- insert into magaza.mehsul (ad, kateqoriya_id, qiymet, endirimli_qiymet)
--- values ('Null Endirim 2', 2, 100.00, NULL);
-
--- Xəta mesajı:
--- ERROR: new row for relation "mehsul" violates check constraint "chk_mehsul_endirimli_qiymet"
--- Alternativ həll: alter column endirimli_qiymet set not null;
+-- (b) Dövrəni kəsən düzgün variant: ziyarət olunmuş düyünlər massivdə saxlanılır.
+WITH RECURSIVE ag AS (SELECT q.ust,
+                             q.alt,
+                             1                    AS seviyye,
+                             ARRAY [q.ust, q.alt] AS yol
+                      FROM qraf q
+                      WHERE q.ust = 1
+                      UNION ALL
+                      SELECT q.ust,
+                             q.alt,
+                             a.seviyye + 1,
+                             a.yol || q.alt
+                      FROM qraf q
+                               JOIN ag a ON q.ust = a.alt
+                      WHERE NOT (q.alt = ANY (a.yol))
+                        AND a.seviyye < 10)
+SELECT ust     AS ust,
+       alt     AS alt,
+       seviyye AS seviyye,
+       yol     AS yol
+FROM ag
+ORDER BY seviyye, ust, alt;
+-- Massiv dövrəni kəsir, seviyye < 10 isə əlavə qoruyucudur.
 
 
--- =====================================================================
--- D. Standart və hesablanan dəyərlər (15–17, 6 bal)
--- =====================================================================
+-- ============================================================
+-- D. CTE performansı və materializasiya
+-- ============================================================
+
+-- Bu bölmə üçün ölçüləcək böyük temp cədvəl
+DROP TABLE IF EXISTS t_agir;
+CREATE TEMP TABLE t_agir
+(
+    id         INT,
+    musteri_id INT,
+    mebleg     NUMERIC(10, 2),
+    tarix      DATE
+);
+INSERT INTO t_agir
+SELECT i,
+       (random() * 5000)::int + 1,
+       (random() * 900 + 10)::numeric(10, 2),
+       DATE '2024-01-01' + (i % 240)
+FROM generate_series(1, 500000) AS i;
+ANALYZE t_agir;
+
 
 -- 15-ci tapşırıq
--- Standart dəyərləri qurun: musteri.qeydiyyat_tarixi → cari tarix, mehsul.anbarda_say → 0, mehsul.aktiv → true, sifaris.status → 'gozleyir'. (2 bal)
+EXPLAIN (ANALYZE, BUFFERS)
+WITH t AS MATERIALIZED (SELECT musteri_id,
+                               SUM(mebleg) AS cem
+                        FROM t_agir
+                        GROUP BY musteri_id)
+SELECT COUNT(*) AS say,
+       AVG(cem) AS orta
+FROM t;
 
--- Cədvəllər artıq yaradılıb, ona görə mövcud sütunlara DEFAULT təyin olunur.
-alter table magaza.musteri
-    alter column qeydiyyat_tarixi set default current_date;
+EXPLAIN (ANALYZE, BUFFERS)
+WITH t AS NOT MATERIALIZED (SELECT musteri_id,
+                                   SUM(mebleg) AS cem
+                            FROM t_agir
+                            GROUP BY musteri_id)
+SELECT COUNT(*) AS say,
+       AVG(cem) AS orta
+FROM t;
+/* Plan fərqi və vaxtlar:
+   MATERIALIZED:     Aggregate > CTE Scan on t > HashAggregate > Seq Scan, Execution Time 98.7 ms
+   NOT MATERIALIZED: Aggregate > HashAggregate > Seq Scan, CTE Scan düyünü yoxdur, 102.5 ms
+   Bir dəfə istinad olunanda fərq yoxdur, çünki plan onsuz da bir dəfə icra olunur.
+   MATERIALIZED nəticəni ayrıca saxlayır, NOT MATERIALIZED isə sorğunu əsas plana yerləşdirir. */
 
-alter table magaza.mehsul
-    alter column anbarda_say set default 0;
-
-alter table magaza.mehsul
-    alter column aktiv set default true;
-
-alter table magaza.sifaris
-    alter column status set default 'gozleyir';
-
--- Yoxlama: DEFAULT dəyərləri information_schema-dan görünür.
-select table_name, column_name, column_default
-from information_schema.columns
-where table_schema = 'magaza'
-  and column_default is not null
-order by table_name, column_name;
 
 -- 16-cı tapşırıq
--- İki müştəri əlavə edin: birində qeydiyyat_tarixi sütununu ümumiyyətlə yazmayın, digərində isə açıq şəkildə NULL yazın. Nəticələr fərqlidir — səbəbini izah edin. (2 bal)
--- İpucu: DEFAULT yalnız sütun sorğuda iştirak etmədikdə işə düşür.
+EXPLAIN (ANALYZE)
+WITH t AS NOT MATERIALIZED (SELECT musteri_id,
+                                   SUM(mebleg) AS cem
+                            FROM t_agir
+                            GROUP BY musteri_id)
+SELECT (SELECT COUNT(*) FROM t) AS say,
+       (SELECT MAX(cem) FROM t) AS maks,
+       (SELECT MIN(cem) FROM t) AS min;
 
--- Birinci müştəri: qeydiyyat_tarixi sütunu sorğuda yoxdur.
-insert into magaza.musteri (ad, soyad, email, telefon)
-values ('Default', 'User', 'email1@mail.ru', '0503334455');
-
--- İkinci müştəri: qeydiyyat_tarixi sütununa açıq NULL yazılır.
-insert into magaza.musteri (ad, soyad, email, telefon, qeydiyyat_tarixi)
-values ('Explicit', 'Null', 'email2@mail.ru', '0504445566', NULL);
-
-select ad, soyad, qeydiyyat_tarixi
-from magaza.musteri
-where soyad in ('User', 'Null');
-
--- Nəticə: birinci sətirdə qeydiyyat_tarixi cari tarixdir, ikincidə NULL.
-
--- İzah (fərqin səbəbi): DEFAULT yalnız sütun INSERT-də iştirak etmədikdə işə düşür.
--- Açıq NULL yazdıqda bu, verilmiş dəyər sayılır və baza onu DEFAULT ilə əvəz etmir.
+EXPLAIN (ANALYZE)
+WITH t AS MATERIALIZED (SELECT musteri_id,
+                               SUM(mebleg) AS cem
+                        FROM t_agir
+                        GROUP BY musteri_id)
+SELECT (SELECT COUNT(*) FROM t) AS say,
+       (SELECT MAX(cem) FROM t) AS maks,
+       (SELECT MIN(cem) FROM t) AS min;
+/* NOT MATERIALIZED: planda üç ayrı HashAggregate və üç Seq Scan on t_agir var,
+   yəni aqreqasiya üç dəfə icra olunub. Execution Time 261.4 ms.
+   MATERIALIZED: bir CTE t düyünü, ondan sonra üç CTE Scan. Aqreqasiya bir dəfə icra olunub.
+   Execution Time 97.1 ms, yəni təxminən 2.7 dəfə sürətli.
+   Nəticə: təkrar istinad = təkrar icra. */
 
 
 -- 17-ci tapşırıq
--- sifaris_detal cədvəlinə cemi sütunu əlavə edin — dəyəri say * vahid_qiymet kimi avtomatik hesablansın və saxlanılsın. Sonra bu sütuna əl ilə UPDATE etməyə çalışın və nəticəni qeyd edin. (2 bal)
--- İpucu: `GENERATED ALWAYS AS (say * vahid_qiymet) STORED`.
+-- CTE nəticəsi üzərində indeks qurmaq mümkün deyil, çünki belə bir obyekt yoxdur.
+CREATE INDEX ix_cte ON agir (musteri_id);
+/* Alınan xəta:
+   ERROR:  relation "agir" does not exist */
 
-alter table magaza.sifaris_detal
-    add column cemi numeric(10, 2) generated always as (say * vahid_qiymet) stored;
+-- Eyni ara nəticə TEMP cədvələ yazılır, orada indeks qurmaq mümkündür.
+DROP TABLE IF EXISTS t_ara;
+CREATE TEMP TABLE t_ara AS
+SELECT musteri_id,
+       SUM(mebleg) AS cem
+FROM t_agir
+GROUP BY musteri_id;
+CREATE INDEX idx_t_ara_musteri ON t_ara (musteri_id);
+ANALYZE t_ara;
 
--- Test: cemi sütununu yazmırıq, özü hesablanır.
-insert into magaza.sifaris_detal (sifaris_id, mehsul_id, say, vahid_qiymet)
-values (1, 1, 3, 250.00);
+-- Variant 1, CTE ilə:
+EXPLAIN ANALYZE
+WITH t AS (SELECT musteri_id,
+                  SUM(mebleg) AS cem
+           FROM t_agir
+           GROUP BY musteri_id)
+SELECT musteri_id AS musteri_id,
+       cem        AS cem
+FROM t
+WHERE musteri_id = 777;
 
-select sifaris_id, mehsul_id, say, vahid_qiymet, cemi
-from magaza.sifaris_detal;
+-- Variant 2, indeksli TEMP cədvəl ilə:
+EXPLAIN ANALYZE
+SELECT musteri_id AS musteri_id,
+       cem        AS cem
+FROM t_ara
+WHERE musteri_id = 777;
+/* CTE variantı bütün 500 000 sətri yenidən aqreqasiya edir (Seq Scan + HashAggregate).
+   TEMP cədvəl variantı hazır nəticə üzərində Index Scan edir və millisaniyənin altında qayıdır.
+   Slayd 7-nin açarı: CTE-də nə indeks var, nə statistika, ona görə optimizator sətir sayını
+   səhv qiymətləndirir. */
 
--- Əl ilə UPDATE cəhdi.
--- update magaza.sifaris_detal
--- set cemi = 1000.00
--- where sifaris_id = 1;
 
--- Nəticə: hesablanan sütuna əl ilə dəyər yazmaq mümkün deyil.
--- ERROR: column "cemi" can only be updated to DEFAULT
--- DETAIL: Column "cemi" is a generated column.
-
-
--- =====================================================================
--- E. Cədvəllərarası bağlar — FOREIGN KEY (18–20, 6 bal)
--- =====================================================================
+-- ============================================================
+-- E. CTE, Subquery, VIEW və TEMP TABLE müqayisəsi
+-- ============================================================
 
 -- 18-ci tapşırıq
--- İki adlandırılmış xarici açar qurun: mehsul.kateqoriya_id → kateqoriya.id və sifaris.musteri_id → musteri.id. Mövcud olmayan kateqoriya_id ilə məhsul əlavə etməyə çalışın. (2 bal)
+-- (a) subquery
+SELECT t.seher AS seher,
+       t.cem   AS dovriyye
+FROM (SELECT seher, SUM(mebleg) AS cem FROM satis GROUP BY seher) t
+WHERE t.cem > (SELECT AVG(cem)
+               FROM (SELECT seher, SUM(mebleg) AS cem FROM satis GROUP BY seher) t2)
+ORDER BY t.cem DESC;
 
-alter table magaza.mehsul
-    add constraint fk_mehsul_kateqoriya foreign key (kateqoriya_id) references magaza.kateqoriya (id);
+-- (b) CTE
+WITH seher_cem AS (SELECT seher,
+                          SUM(mebleg) AS cem
+                   FROM satis
+                   GROUP BY seher),
+     orta AS (SELECT AVG(cem) AS orta_cem FROM seher_cem)
+SELECT s.seher AS seher,
+       s.cem   AS dovriyye
+FROM seher_cem s
+         CROSS JOIN orta o
+WHERE s.cem > o.orta_cem
+ORDER BY s.cem DESC;
 
-alter table magaza.sifaris
-    add constraint fk_sifaris_musteri foreign key (musteri_id) references magaza.musteri (id);
+-- (c) VIEW
+DROP VIEW IF EXISTS v_seher_dovriyye;
+CREATE VIEW v_seher_dovriyye AS
+SELECT seher,
+       SUM(mebleg) AS cem
+FROM satis
+GROUP BY seher;
 
--- Mövcud olmayan kateqoriya_id ilə məhsul.
--- endirimli_qiymet 14-cü tapşırıqdan sonra NULL qəbul etmir, ona görə dəyər veririk,
--- yoxsa sətir FK-ya çatmadan CHECK-də dayanar.
--- insert into magaza.mehsul (ad, kateqoriya_id, qiymet, endirimli_qiymet)
--- values ('Invalid Kateqoriya', 999, 100.00, 50.00);
+SELECT seher AS seher,
+       cem   AS dovriyye
+FROM v_seher_dovriyye
+WHERE cem > (SELECT AVG(cem) FROM v_seher_dovriyye)
+ORDER BY cem DESC;
 
--- Mövcud olmayan musteri_id ilə sifariş.
--- insert into magaza.sifaris (musteri_id, status)
--- values (999, 'gozleyir');
+-- (d) TEMP TABLE
+DROP TABLE IF EXISTS t_seher_dovriyye;
+CREATE TEMP TABLE t_seher_dovriyye AS
+SELECT seher,
+       SUM(mebleg) AS cem
+FROM satis
+GROUP BY seher;
 
--- Xəta mesajları:
--- 1) ERROR: insert or update on table "mehsul" violates foreign key constraint "fk_mehsul_kateqoriya"
---    DETAIL: Key (kateqoriya_id)=(999) is not present in table "kateqoriya".
--- 2) ERROR: insert or update on table "sifaris" violates foreign key constraint "fk_sifaris_musteri"
---    DETAIL: Key (musteri_id)=(999) is not present in table "musteri".
+SELECT seher AS seher,
+       cem   AS dovriyye
+FROM t_seher_dovriyye
+WHERE cem > (SELECT AVG(cem) FROM t_seher_dovriyye)
+ORDER BY cem DESC;
+-- Dörd variant da eyni nəticəni verir, fərq yalnız obyektin yaşam müddətində və imkanlarındadır.
+
 
 -- 19-cu tapşırıq
--- Üç fərqli silinmə davranışı qurun və hər birini ayrıca test edin: sifaris_detal.sifaris_id → CASCADE, sifaris_detal.mehsul_id → RESTRICT, mehsul.kateqoriya_id → SET NULL. Hər halda valideyn sətri silib nəticəni yazın. (2 bal)
+/* Müqayisə cədvəli, 6 meyar və 4 variant:
 
--- 17-ci tapşırıqda əlavə edilmiş detal sətri valideynsizdir (o vaxt FK yox idi),
--- FK qurmaq üçün əvvəlcə onu silirik.
-delete
-from magaza.sifaris_detal
-where sifaris_id = 1
-  and mehsul_id = 1;
+   Meyar            | Subquery         | CTE               | VIEW               | TEMP TABLE
+   -----------------+------------------+-------------------+--------------------+---------------------
+   Fiziki obyekt    | yoxdur           | yoxdur            | yalnız tərif       | var, pg_temp sxemdə
+   Yaşam müddəti    | bir sorğu        | bir sorğu         | silinənə qədər     | sessiya, ya tranzaksiya
+   Təkrar istinad   | hər dəfə yenidən | hər dəfə yenidən  | hər dəfə yenidən   | bir dəfə doldurulur
+   İndeks           | qurula bilməz    | qurula bilməz     | qurula bilməz      | qurula bilər
+   Statistika       | yoxdur           | yoxdur            | baza cədvəlindən   | ANALYZE ilə var
+   Rekursiya        | dəstəklənmir     | WITH RECURSIVE var| daxilində CTE ilə  | dəstəklənmir
+*/
 
-alter table magaza.sifaris_detal
-    add constraint fk_sifaris_detal_sifaris foreign key (sifaris_id) references magaza.sifaris (id) on delete cascade;
+-- Sübut 1: VIEW-in tərifi kataloqda qalır.
+SELECT schemaname AS sxem,
+       viewname   AS ad,
+       definition AS tarif
+FROM pg_views
+WHERE viewname = 'v_seher_dovriyye';
 
-alter table magaza.sifaris_detal
-    add constraint fk_sifaris_detal_mehsul foreign key (mehsul_id) references magaza.mehsul (id) on delete restrict;
-
--- fk_mehsul_kateqoriya 18-ci tapşırıqda yaradılıb, eyni adla ikinci dəfə yaratmaq olmaz, ona görə
--- əvvəlcə silib, sonra SET NULL davranışı ilə yenidən qururuq.
-alter table magaza.mehsul
-    drop constraint fk_mehsul_kateqoriya;
-
-alter table magaza.mehsul
-    add constraint fk_mehsul_kateqoriya foreign key (kateqoriya_id) references magaza.kateqoriya (id) on delete set null;
-
-
--- (a) CASCADE testi: sifariş silinəndə onun detalları da silinir.
-insert into magaza.sifaris (musteri_id, status)
-values ((select id from magaza.musteri where email = 'ali@mail.ru'), 'gozleyir');
-
-insert into magaza.sifaris_detal (sifaris_id, mehsul_id, say, vahid_qiymet)
-values ((select max(id) from magaza.sifaris),
-        (select id from magaza.mehsul where ad = 'Yeni Mehsul' and kateqoriya_id = 1),
-        2, 100.00);
-
-delete
-from magaza.sifaris
-where id = (select max(id) from magaza.sifaris);
-
--- Detal sətri də silindi: nəticə 0.
-select count(*) as qalan_detal
-from magaza.sifaris_detal;
-
-
--- (b) RESTRICT testi: detalı olan məhsulu silmək mümkün deyil.
-insert into magaza.sifaris (musteri_id, status)
-values ((select id from magaza.musteri where email = 'ali@mail.ru'), 'gozleyir');
-
-insert into magaza.sifaris_detal (sifaris_id, mehsul_id, say, vahid_qiymet)
-values ((select max(id) from magaza.sifaris),
-        (select id from magaza.mehsul where ad = 'Yeni Mehsul' and kateqoriya_id = 1),
-        2, 100.00);
-
--- delete
--- from magaza.mehsul
--- where ad = 'Yeni Mehsul'
---   and kateqoriya_id = 1;
-
-
--- (c) SET NULL testi: kateqoriya silinəndə məhsulun kateqoriya_id-si NULL olur.
-delete
-from magaza.kateqoriya
-where ad = 'Aksesuar';
-
-select ad, kateqoriya_id
-from magaza.mehsul
-where kateqoriya_id is null;
-
-
--- Nəticələr:
--- (a) CASCADE: valideyn sifariş silindi, sifaris_detal sətri avtomatik silindi (qalan_detal = 0).
--- (b) RESTRICT: silinmə baş tutmadı.
---     ERROR: update or delete on table "mehsul" violates foreign key constraint
---            "fk_sifaris_detal_mehsul" on table "sifaris_detal"
---     DETAIL: Key (id)=(1) is still referenced from table "sifaris_detal".
--- (c) SET NULL: kateqoriya sətri silindi, ona istinad edən məhsulların kateqoriya_id-si NULL oldu.
+-- Sübut 2: TEMP cədvəl pg_tables-də görünür, CTE adı isə heç bir kataloqda yoxdur.
+SELECT schemaname AS sxem,
+       tablename  AS ad
+FROM pg_tables
+WHERE tablename IN ('t_seher_dovriyye', 'seher_cem');
+-- Nəticədə yalnız t_seher_dovriyye görünür, seher_cem adlı CTE üçün sətir yoxdur.
 
 
 -- 20-ci tapşırıq
--- musteri cədvəlinə devet_eden_id sütunu əlavə edin — həmin cədvələ istinad etsin (özünə istinad edən açar). Sonra bir-birini dəvət etmiş iki müştərini tək tranzaksiyada əlavə edin. (2 bal)
--- İpucu: Adi FK ilə mümkün deyil — DEFERRABLE INITIALLY DEFERRED lazımdır. Yoxlama COMMIT anına təxirə salınır.
+/* ① 800 min sətirlik ara nəticə dörd dəfə JOIN olunur.
+      Seçim: TEMP TABLE. Ara nəticə bir dəfə doldurulur, indeks və ANALYZE ilə dörd JOIN sürətlənir.
+   ② Eyni filtr məntiqi altı fərqli hesabatda təkrarlanır.
+      Seçim: VIEW. Məntiq bir yerdə saxlanılır və bütün hesabatlar eyni tərifdən istifadə edir.
+   ③ Kateqoriya ağacının bütün səviyyələri lazımdır.
+      Seçim: RECURSIVE CTE. Ağacın dərinliyi əvvəlcədən bilinmir, yalnız rekursiya bunu həll edir. */
 
-alter table magaza.musteri
-    add column devet_eden_id int;
+-- ③ variantı işlək sorğu kimi:
+WITH RECURSIVE agac AS (SELECT kateqoriya_id,
+                               ad,
+                               ust_id,
+                               1 AS seviyye
+                        FROM kateqoriya
+                        WHERE ust_id IS NULL
+                        UNION ALL
+                        SELECT k.kateqoriya_id,
+                               k.ad,
+                               k.ust_id,
+                               a.seviyye + 1
+                        FROM kateqoriya k
+                                 JOIN agac a ON k.ust_id = a.kateqoriya_id)
+SELECT kateqoriya_id AS kateqoriya_id,
+       ad            AS ad,
+       seviyye       AS seviyye
+FROM agac
+ORDER BY seviyye, ad;
 
--- Özünə istinad edən FK. Yoxlama COMMIT anına təxirə salınır.
-alter table magaza.musteri
-    add constraint fk_musteri_devet_eden foreign key (devet_eden_id) references magaza.musteri (id)
-        deferrable initially deferred;
 
--- Bir-birini dəvət etmiş iki müştəri tək tranzaksiyada.
--- id GENERATED ALWAYS olduğu üçün açıq id yazmaq üçün OVERRIDING SYSTEM VALUE lazımdır.
-begin;
-
-insert into magaza.musteri (id, ad, soyad, email, telefon, devet_eden_id)
-    overriding system value
-values (9001, 'Aygun', 'Mammadova', 'aygun@mail.ru', '0505556677', 9002);
-
-insert into magaza.musteri (id, ad, soyad, email, telefon, devet_eden_id)
-    overriding system value
-values (9002, 'Kamran', 'Hesenov', 'kamran@mail.ru', '0506667788', 9001);
-
-commit;
-
-select id, ad, devet_eden_id
-from magaza.musteri
-where id in (9001, 9002);
-
--- Nəticə: birinci INSERT hələ mövcud olmayan 9002-yə istinad edir, amma FK DEFERRABLE
--- INITIALLY DEFERRED olduğu üçün yoxlama COMMIT anında aparılır və hər iki sətir keçir.
--- Adi FK-da birinci INSERT dərhal xəta verərdi.
-
--- =====================================================================
--- F. Məhdudiyyətlərin idarə olunması (21–25, 10 bal)
--- =====================================================================
+-- ============================================================
+-- F. Müvəqqəti cədvəllər, yaradılması və yaşam müddəti
+-- ============================================================
 
 -- 21-ci tapşırıq
--- mehsul.anbarda_say sütununu məcburi (NOT NULL) edin. Cədvəldə NULL dəyərlər varsa xəta alacaqsınız — əvvəlcə problemli sətirləri tapan sorğu yazın, onları düzəldin, sonra məhdudiyyəti tətbiq edin. (2 bal)
+DROP TABLE IF EXISTS t_ayliq;
+CREATE TEMP TABLE t_ayliq AS
+SELECT DATE_TRUNC('month', tarix)::date AS ay,
+       COUNT(*)                         AS satis_sayi,
+       SUM(mebleg)                      AS dovriyye
+FROM satis
+GROUP BY DATE_TRUNC('month', tarix);
 
--- Əvvəlcə problemli sətirləri tapırıq.
-select id, ad, anbarda_say
-from magaza.mehsul
-where anbarda_say is null;
+SELECT COUNT(*) AS setir_sayi
+FROM t_ayliq;
 
--- Düzəliş: NULL yerinə 0 yazırıq (15-ci tapşırıqdakı default da 0-dır,
--- amma default yalnız yeni sətirlərə işləyir, köhnələrə yox).
-update magaza.mehsul
-set anbarda_say = 0
-where anbarda_say is null;
+SELECT c.relname AS cedvel,
+       n.nspname AS sxem
+FROM pg_class c
+         JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE c.relname = 't_ayliq';
+-- Nəticə: sxem pg_temp_N şəklindədir, yəni cədvəl sessiyanın öz temp sxemində yaranıb.
 
-alter table magaza.mehsul
-    alter column anbarda_say set not null;
-
--- Sütun səviyyəsindəki NOT NULL-a ad vermək mümkün deyil, ona görə eyni qaydanı
--- adlandırılmış CHECK kimi də yazırıq.
-alter table magaza.mehsul
-    add constraint chk_mehsul_anbarda_say_not_null check (anbarda_say is not null);
 
 -- 22-ci tapşırıq
--- mehsul üzərindəki qiymət CHECK-ini silin və yerinə yenisini qoyun: qiymət 0-dan böyük və 100 000-dən kiçik olsun. Silmə və əlavə etmə eyni ALTER TABLE ifadəsində yazıla bilərmi? Yoxlayın. (2 bal)
+BEGIN;
+CREATE TEMP TABLE t_drop
+(
+    n INT
+) ON COMMIT DROP;
+INSERT INTO t_drop
+VALUES (1),
+       (2);
+SELECT COUNT(*) AS commit_evveli
+FROM t_drop;
+COMMIT;
 
-alter table magaza.mehsul
-    drop constraint chk_mehsul_qiymet,
-    add constraint chk_mehsul_qiymet check (qiymet > 0 and qiymet < 100000);
-
--- Nəticə: bəli, DROP və ADD eyni ALTER TABLE ifadəsində vergüllə yazıla bilər.
--- Hər ikisi tək əmr kimi, tək tranzaksiyada icra olunur, aralıqda cədvəl
--- məhdudiyyətsiz qalmır.
+SELECT COUNT(*) AS commit_sonrasi
+FROM t_drop;
+/* Alınan xəta:
+   ERROR:  relation "t_drop" does not exist
+   İzah: ON COMMIT DROP cədvəli tranzaksiya bitən kimi tamamilə silir. */
 
 
 -- 23-cü tapşırıq
--- Vəziyyət: cədvəldə qaydanı pozan köhnə sətirlər var, amma yeni sətirlərə qayda tətbiq olunmalıdır. Məhdudiyyəti mövcud sətirləri yoxlamadan əlavə edin, bir neçə səhv INSERT ilə onun işlədiyini sübut edin, sonra köhnə sətirləri düzəldib məhdudiyyəti təsdiqləyin. (2 bal)
--- İpucu: `ADD CONSTRAINT ... NOT VALID`, sonra `VALIDATE CONSTRAINT`. Fərqi izah edin.
+CREATE TEMP TABLE t_delete
+(
+    n INT
+) ON COMMIT DELETE ROWS;
 
--- Qaydanı pozan köhnə sətir. Minimum qiymət qaydası hələ yoxdur, ona görə keçir.
--- aktiv = false yazırıq, çünki 9-cu tapşırıqdakı partial unique index kateqoriyada
--- yalnız bir aktiv məhsula icazə verir.
-insert into magaza.mehsul (ad, kateqoriya_id, qiymet, endirimli_qiymet, anbarda_say, aktiv)
-values ('Kohne Ucuz Mehsul', 1, 0.50, 0.50, 5, false);
+BEGIN;
+INSERT INTO t_delete
+VALUES (1),
+       (2),
+       (3);
+SELECT COUNT(*) AS tranzaksiya_daxilinde
+FROM t_delete;
+COMMIT;
+SELECT COUNT(*) AS birinci_commitden_sonra
+FROM t_delete;
 
--- Məhdudiyyət NOT VALID ilə əlavə olunur, mövcud sətirlər yoxlanmır, ona görə
--- yuxarıdakı səhv sətrə baxmayaraq əmr uğurla keçir.
-alter table magaza.mehsul
-    add constraint chk_mehsul_min_qiymet check (qiymet >= 1) not valid;
-
--- Test: yeni sətirlərə qayda işləyir, bu iki INSERT xəta verir.
--- insert into magaza.mehsul (ad, kateqoriya_id, qiymet, endirimli_qiymet, anbarda_say, aktiv)
--- values ('Yeni Ucuz Mehsul', 1, 0.80, 0.80, 5, false);
-
--- insert into magaza.mehsul (ad, kateqoriya_id, qiymet, endirimli_qiymet, anbarda_say, aktiv)
--- values ('Yeni Pulsuz Mehsul', 1, 0.10, 0.10, 5, false);
-
--- Xəta mesajı:
--- ERROR: new row for relation "mehsul" violates check constraint "chk_mehsul_min_qiymet"
--- DETAIL: Failing row contains (..., 0.80, ...).
-
--- İndi köhnə sətri düzəldirik və məhdudiyyəti təsdiqləyirik.
-update magaza.mehsul
-set qiymet           = 1.00,
-    endirimli_qiymet = 1.00
-where ad = 'Kohne Ucuz Mehsul';
-
-alter table magaza.mehsul
-    validate constraint chk_mehsul_min_qiymet;
-
--- İzah (NOT VALID ilə VALIDATE fərqi):
--- NOT VALID məhdudiyyəti mövcud sətirləri yoxlamadan əlavə edir: yalnız yeni INSERT
--- və UPDATE-lərə tətbiq olunur, ona görə cədvəl uzun müddət kilidlənmir.
--- VALIDATE CONSTRAINT isə sonradan mövcud sətirləri bir dəfə yoxlayır; hamısı qaydaya
--- uyğundursa məhdudiyyət tam etibarlı olur (pg_constraint.convalidated = true).
--- Səhv sətir qalıbsa VALIDATE xəta verir və məhdudiyyət NOT VALID vəziyyətində qalır.
+BEGIN;
+INSERT INTO t_delete
+VALUES (4),
+       (5);
+SELECT COUNT(*) AS tranzaksiya_daxilinde
+FROM t_delete;
+COMMIT;
+SELECT COUNT(*) AS ikinci_commitden_sonra
+FROM t_delete;
+/* Hər COMMIT-dən sonra COUNT(*) = 0, amma SELECT xəta vermir.
+   Fərq: ON COMMIT DROP cədvəlin özünü silir, ON COMMIT DELETE ROWS isə yalnız sətirləri silir,
+   cədvəl sessiyanın sonuna qədər qalır. */
 
 
 -- 24-cü tapşırıq
--- Kütləvi məlumat yükləməsi üçün bir FK-nın yoxlanışını müvəqqəti dayandırmaq lazımdır. İki fərqli yol yazın və hər birinin risklərini bir cümlə ilə müqayisə edin. (2 bal)
--- İpucu: Birinci yol — məhdudiyyəti silib yükləmədәn sonra geri qaytarmaq; ikinci yol — `SET CONSTRAINTS ALL DEFERRED` tranzaksiya daxilindә.
+-- Sessiya A
+CREATE TEMP TABLE t_test
+(
+    n INT
+);
+INSERT INTO t_test
+VALUES (1),
+       (2),
+       (3);
+SELECT COUNT(*) AS sessiya_a_sayi
+FROM t_test;
+-- Müşahidə: sessiya_a_sayi = 3
 
--- 1-ci yol: FK-nı silmək, yükləməni etmək, sonra geri qaytarmaq.
-alter table magaza.sifaris
-    drop constraint fk_sifaris_musteri;
+-- Sessiya B (ayrı psql bağlantısı)
+-- CREATE TEMP TABLE t_test (n INT);
+-- INSERT INTO t_test VALUES (10), (20);
+-- SELECT COUNT(*) AS sessiya_b_sayi FROM t_test;
+-- Müşahidə: sessiya_b_sayi = 2, yəni B sessiyası A-nın sətirlərini görmür.
 
--- ... burada kütləvi yükləmə gedir ...
-insert into magaza.sifaris (musteri_id, status)
-values ((select id from magaza.musteri where email = 'ali@mail.ru'), 'gozleyir');
+-- İki fərqli temp sxem hər iki sessiya açıq olanda görünür:
+SELECT c.relname AS cedvel,
+       n.nspname AS sxem
+FROM pg_class c
+         JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE c.relname = 't_test'
+ORDER BY n.nspname;
+-- Müşahidə: t_test adı iki dəfə görünür, sxemlər pg_temp_3 və pg_temp_4 kimi fərqlidir.
+-- SQL Server qarşılığı: #t_test lokal temp cədvəldir (sessiyaya aiddir),
+-- ##t_test isə qlobal temp cədvəldir (bütün sessiyalara görünür).
 
-alter table magaza.sifaris
-    add constraint fk_sifaris_musteri foreign key (musteri_id) references magaza.musteri (id);
 
--- 2-ci yol: FK DEFERRABLE olmalıdır, yoxlama tranzaksiyanın sonuna keçir.
--- 20-ci tapşırıqdakı fk_musteri_devet_eden məhz belə qurulub.
-begin;
-
-set constraints all deferred;
-
-insert into magaza.musteri (id, ad, soyad, email, telefon, devet_eden_id)
-    overriding system value
-values (9003, 'Nigar', 'Aliyeva', 'nigar@mail.ru', '0507778899', 9004);
-
-insert into magaza.musteri (id, ad, soyad, email, telefon, devet_eden_id)
-    overriding system value
-values (9004, 'Rauf', 'Quliyev', 'rauf@mail.ru', '0508889900', 9003);
-
-commit;
-
--- Risklərin müqayisəsi:
--- 1-ci yolda yükləmə vaxtı FK ümumiyyətlə yoxdur, ona görə istənilən səhv sətir cədvələ
---   düşür; geri qaytaranda baza bütün cədvəli yenidən yoxlayır və bir səhv sətir tapılsa
---   ADD CONSTRAINT xəta verir, cədvəl isə FK-sız qalır.
--- 2-ci yolda yoxlama itmir, sadəcə COMMIT anına təxirə salınır: səhv sətir varsa bütün
---   tranzaksiya geri qayıdır, yəni məlumat təhlükəsizdir, amma yükləmə tək tranzaksiyada
---   getdiyi üçün kilidlər uzun saxlanılır və WAL həcmi böyüyür.
-
+-- ============================================================
+-- G. Müvəqqəti cədvəllər, indeks, statistika, resurs
+-- ============================================================
 
 -- 25-ci tapşırıq
--- Audit sorğusu. Sxeminizdəki bütün məhdudiyyətləri bir cədvəldə çıxarın: cədvəl adı, məhdudiyyət adı, tipi (p / u / c / f hərfləri Esas acar, Tekrarsiz, Yoxlama, Xarici acar kimi oxunaqlı yazılsın) və tam tərifi. Cədvəl adına görə sıralansın. (2 bal)
--- İpucu: `pg_constraint` + CASE + `pg_get_constraintdef(oid)` + `conrelid::regclass`.
+DROP TABLE IF EXISTS t_musteri_cem;
+DROP TABLE IF EXISTS t_kicik;
 
-SELECT conrelid::regclass        AS table_name,
-       conname                   AS constraint_name,
-       CASE contype
-           WHEN 'p' THEN 'Əsas açar'
-           WHEN 'u' THEN 'Təkrarsız'
-           WHEN 'c' THEN 'Yoxlama'
-           WHEN 'f' THEN 'Xarici açar'
-           END                   AS constraint_type,
-       pg_get_constraintdef(oid) AS constraint_definition
-FROM pg_constraint
-WHERE connamespace = 'magaza'::regnamespace
-ORDER BY conrelid::regclass, conname;
+CREATE TEMP TABLE t_musteri_cem
+(
+    musteri_id INT,
+    cem        NUMERIC(12, 2)
+);
+INSERT INTO t_musteri_cem
+SELECT (random() * 5000)::int + 1,
+       (random() * 900 + 10)::numeric(12, 2)
+FROM generate_series(1, 200000);
 
--- =====================================================================
--- G. İndekslər — əsaslar (26–30, 10 bal)
--- Bütün işlər satis_log üzərində. Hər ölçmədən əvvəl: ANALYZE magaza.satis_log;
--- Ölçmə cədvəlləri hesabat.md faylındadır.
--- =====================================================================
+CREATE TEMP TABLE t_kicik
+(
+    musteri_id INT
+);
+INSERT INTO t_kicik
+SELECT generate_series(1, 50);
+
+-- Addım 1: yalnız doldurulub
+EXPLAIN ANALYZE
+SELECT k.musteri_id AS musteri_id,
+       SUM(t.cem)   AS cem
+FROM t_kicik k
+         JOIN t_musteri_cem t ON t.musteri_id = k.musteri_id
+GROUP BY k.musteri_id;
+
+-- Addım 2: indeks quruldu
+CREATE INDEX idx_t_musteri_cem ON t_musteri_cem (musteri_id);
+EXPLAIN ANALYZE
+SELECT k.musteri_id AS musteri_id,
+       SUM(t.cem)   AS cem
+FROM t_kicik k
+         JOIN t_musteri_cem t ON t.musteri_id = k.musteri_id
+GROUP BY k.musteri_id;
+
+-- Addım 3: ANALYZE edildi
+ANALYZE t_musteri_cem;
+ANALYZE t_kicik;
+EXPLAIN ANALYZE
+SELECT k.musteri_id AS musteri_id,
+       SUM(t.cem)   AS cem
+FROM t_kicik k
+         JOIN t_musteri_cem t ON t.musteri_id = k.musteri_id
+GROUP BY k.musteri_id;
+/* Üç addımın müqayisəsi:
+
+   Addım              | Plan düyünü                  | Gözlənilən / faktiki sətir | İcra vaxtı
+   -------------------+------------------------------+----------------------------+-----------
+   1) doldurulub      | Seq Scan on t_musteri_cem    | 2 345 235 / 1 948          | 44.7 ms
+   2) indeks quruldu  | Index Scan idx_t_musteri_cem | 2 550 000 / 1 948          | 1.16 ms
+   3) ANALYZE edildi  | Index Scan idx_t_musteri_cem | 2 003 / 1 948              | 1.14 ms
+
+   Seq Scan > Index Scan keçidi vaxtı 38 dəfə azaldır, ANALYZE isə gözlənilən sətir sayını
+   faktiki sayın yanına gətirir. */
+
 
 -- 26-cı tapşırıq
--- `WHERE mehsul_adi = 'Mehsul 4321'` sorğusunu `EXPLAIN (ANALYZE, BUFFERS)` ilə ölçün, sonra indeks qurub təkrar ölçün. İki cədvəldə müqayisə edin: icra vaxtı, plan növü (Seq Scan / Index Scan) və oxunan blok sayı (shared hit/read). (2 bal)
+DROP TABLE IF EXISTS t_stat;
+CREATE TEMP TABLE t_stat
+(
+    musteri_id INT,
+    cem        NUMERIC(12, 2)
+);
+INSERT INTO t_stat
+SELECT (random() * 5000)::int + 1,
+       (random() * 900 + 10)::numeric(12, 2)
+FROM generate_series(1, 200000);
 
-analyze magaza.satis_log;
+-- ANALYZE-dən əvvəl
+SELECT relname   AS cedvel,
+       reltuples AS reltuples
+FROM pg_class
+WHERE relname = 't_stat';
+EXPLAIN
+SELECT musteri_id AS musteri_id
+FROM t_stat
+WHERE musteri_id = 100;
 
--- İndekssiz ölçmə.
-explain (analyze, buffers)
-select *
-from magaza.satis_log
-where mehsul_adi = 'Mehsul 4321';
-
-create index idx_satis_log_mehsul_adi on magaza.satis_log (mehsul_adi);
-
-analyze magaza.satis_log;
-
--- İndekslə ölçmə.
-explain (analyze, buffers)
-select *
-from magaza.satis_log
-where mehsul_adi = 'Mehsul 4321';
-
--- İzah: indekssiz plan Seq Scan-dır, 300 000 sətrin hamısı oxunur (shared hit=3258),
--- filtrdən sonra 60 sətir qalır, icra 16.5 ms. İndeksdən sonra plan Bitmap Index Scan +
--- Bitmap Heap Scan olur, cəmi 63 blok oxunur (hit=60, read=3) və icra 0.08 ms-ə düşür.
--- Təqribən 200 dəfə sürətlidir. Ölçmə cədvəli hesabat.md-dədir.
+-- ANALYZE-dən sonra
+ANALYZE t_stat;
+SELECT relname   AS cedvel,
+       reltuples AS reltuples
+FROM pg_class
+WHERE relname = 't_stat';
+EXPLAIN
+SELECT musteri_id AS musteri_id
+FROM t_stat
+WHERE musteri_id = 100;
+/* Müşahidə:
+   ANALYZE-dən əvvəl reltuples = -1, yəni statistika heç vaxt yığılmayıb, plan rows=920 gözləyir.
+   ANALYZE-dən sonra reltuples = 200000 olur və plan rows=40 gözləyir, bu da 200 000 / 5 000
+   paylanmasına uyğun real dəyərdir. Autovacuum temp cədvəlləri görmür, çünki onlar yalnız öz sessiyasına
+   aiddir, ona görə ANALYZE əl ilə yazılmalıdır. */
 
 
 -- 27-ci tapşırıq
--- (kateqoriya, tarix) üzrə kompozit indeks qurun və üç sorğunu ayrı-ayrı yoxlayın: (a) yalnız kateqoriya üzrə, (b) yalnız tarix üzrə, (c) hər ikisi üzrə. Hansında indeks işə düşmədi? Kompozit indeksdə sütun sırasının niyə vacib olduğunu izah edin. (2 bal)
--- İpucu: Sol prefiks qaydası (leftmost prefix).
+-- \timing on
+-- (a) əvvəl indeks, sonra INSERT
+DROP TABLE IF EXISTS t_a;
+CREATE TEMP TABLE t_a
+(
+    id    INT,
+    deyer NUMERIC(10, 2)
+);
+CREATE INDEX idx_t_a ON t_a (id);
+INSERT INTO t_a
+SELECT i, (random() * 1000)::numeric(10, 2)
+FROM generate_series(1, 200000) AS i;
 
-create index idx_satis_log_kateqoriya_tarix on magaza.satis_log (kateqoriya, tarix);
+-- (b) əvvəl INSERT, sonra indeks
+DROP TABLE IF EXISTS t_b;
+CREATE TEMP TABLE t_b
+(
+    id    INT,
+    deyer NUMERIC(10, 2)
+);
+INSERT INTO t_b
+SELECT i, (random() * 1000)::numeric(10, 2)
+FROM generate_series(1, 200000) AS i;
+CREATE INDEX idx_t_b ON t_b (id);
+/* Ölçmə nəticəsi:
+   (a) CREATE INDEX 0.45 ms + INSERT 255.98 ms = 256.43 ms
+   (b) INSERT 158.78 ms + CREATE INDEX 36.91 ms = 195.68 ms
+   Fərq: (b) variantı təxminən 24 faiz sürətlidir.
+   Səbəb: indeks əvvəlcədən mövcud olanda hər INSERT indeksi də yeniləyir. Sonra qurulanda
+   indeks bir dəfə, hazır data üzərində qurulur. */
 
-analyze magaza.satis_log;
 
--- (a) yalnız kateqoriya üzrə, indeksin sol sütunu.
-explain (analyze, buffers)
-select *
-from magaza.satis_log
-where kateqoriya = 'Texnika';
-
--- (b) yalnız tarix üzrə, indeksin ikinci sütunu.
-explain (analyze, buffers)
-select *
-from magaza.satis_log
-where tarix = date '2022-05-01';
-
--- (c) hər iki sütun üzrə.
-explain (analyze, buffers)
-select *
-from magaza.satis_log
-where kateqoriya = 'Texnika'
-  and tarix = date '2022-05-01';
-
--- İzah (sol prefiks qaydası): (a) və (c) indeksi düzgün işlədir: Index Cond-da indeksin
--- sol sütunu (kateqoriya) var, Bitmap Index Scan qiyməti 663 və 5.02-dir.
--- (b)-də indeks yenə seçilir, amma sol sütun şərtdə olmadığı üçün baza bütün indeksi
--- başdan-sona oxuyur: qiymət 3266, yəni (c)-dəkindən ~650 dəfə baha.
--- B-tree indeks açarları soldan sağa sıralayır. Birinci sütun şərtdə yoxdursa,
--- hədəflənmiş axtarış mümkün deyil. Ona görə kompozit indeksdə ən çox filtrlənən
--- sütun birinci yazılır.
-
+-- ============================================================
+-- H. Seçim məntiqi, CTE, TEMP və ya VIEW
+-- ============================================================
 
 -- 28-ci tapşırıq
--- UNIQUE məhdudiyyət ilə UNIQUE INDEX arasındakı fərqi praktikada göstərin: ikisini də yaradın, pg_constraint və pg_indexes-də axtarın, sonra hər birini DROP CONSTRAINT ilə silməyə çalışın. Nəticəni izah edin. (2 bal)
+-- Variant 1: yalnız CTE ilə
+EXPLAIN ANALYZE
+WITH RECURSIVE
+    agac AS (SELECT kateqoriya_id,
+                    ad,
+                    kateqoriya_id AS kok_id,
+                    ad            AS kok_ad
+             FROM kateqoriya
+             WHERE ust_id IS NULL
+             UNION ALL
+             SELECT k.kateqoriya_id,
+                    k.ad,
+                    a.kok_id,
+                    a.kok_ad
+             FROM kateqoriya k
+                      JOIN agac a ON k.ust_id = a.kateqoriya_id),
+    ayliq AS (SELECT DATE_TRUNC('month', s.tarix)::date AS ay,
+                     a.kok_ad                           AS kok_ad,
+                     s.seher                            AS seher,
+                     SUM(s.mebleg)                      AS dovriyye
+              FROM satis s
+                       JOIN agac a ON a.kateqoriya_id = s.kateqoriya_id
+              GROUP BY 1, 2, 3),
+    umumi AS (SELECT SUM(dovriyye) AS umumi_dovriyye FROM ayliq)
+SELECT ay                                          AS ay,
+       kok_ad                                      AS kok_kateqoriya,
+       COALESCE(seher, 'Namelum')                  AS seher,
+       dovriyye                                    AS dovriyye,
+       ROUND(dovriyye * 100 / u.umumi_dovriyye, 1) AS faiz_payi
+FROM ayliq
+         CROSS JOIN umumi u
+ORDER BY ay, kok_ad;
 
--- satis_log.id dəyərləri təkrarsızdır, ona görə hər iki obyekti onun üzərində qururuq.
-alter table magaza.satis_log
-    add constraint uq_satis_log_id unique (id);
+-- Variant 2: TEMP cədvəl, indeks və ANALYZE ilə
+DROP TABLE IF EXISTS t_kok;
+CREATE TEMP TABLE t_kok AS
+WITH RECURSIVE agac AS (SELECT kateqoriya_id,
+                               ad,
+                               kateqoriya_id AS kok_id,
+                               ad            AS kok_ad
+                        FROM kateqoriya
+                        WHERE ust_id IS NULL
+                        UNION ALL
+                        SELECT k.kateqoriya_id,
+                               k.ad,
+                               a.kok_id,
+                               a.kok_ad
+                        FROM kateqoriya k
+                                 JOIN agac a ON k.ust_id = a.kateqoriya_id)
+SELECT kateqoriya_id, kok_id, kok_ad
+FROM agac;
 
-create unique index uq_satis_log_id_musteri on magaza.satis_log (id, musteri_kodu);
+CREATE INDEX idx_t_kok ON t_kok (kateqoriya_id);
+ANALYZE t_kok;
 
--- pg_constraint-də yalnız məhdudiyyət görünür.
-select conname, contype
-from pg_constraint
-where conrelid = 'magaza.satis_log'::regclass
-  and conname like 'uq%';
-
--- pg_indexes-də hər ikisi görünür, çünki məhdudiyyət də özünə indeks yaradıb.
-select indexname
-from pg_indexes
-where schemaname = 'magaza'
-  and tablename = 'satis_log'
-  and indexname like 'uq%';
-
--- Məhdudiyyəti DROP CONSTRAINT silir (indeksi də özü ilə aparır).
-alter table magaza.satis_log
-    drop constraint uq_satis_log_id;
-
--- İndeksi isə DROP CONSTRAINT silmir, xəta verir.
--- alter table magaza.satis_log
---     drop constraint uq_satis_log_id_musteri;
-
--- Xəta mesajı:
--- ERROR: constraint "uq_satis_log_id_musteri" of relation "satis_log" does not exist
-
--- İndeks yalnız DROP INDEX ilə silinir.
-drop index magaza.uq_satis_log_id_musteri;
-
--- İzah: UNIQUE məhdudiyyət həm pg_constraint-də, həm pg_indexes-də görünür, çünki baza onu
--- icra etmək üçün özü unikal indeks yaradır və DROP CONSTRAINT o indeksi də aparır.
--- Əl ilə yaradılan UNIQUE INDEX isə yalnız pg_indexes-dədir; pg_constraint onu tanımır,
--- ona görə DROP CONSTRAINT xəta verir və yalnız DROP INDEX işləyir.
--- Fərq: məhdudiyyət məntiqi qaydadır, indeks onun texniki icrasıdır. Xarici açar yalnız
--- məhdudiyyətə istinad edə bilər, təkbaşına unikal indeksə yox.
+EXPLAIN ANALYZE
+WITH ayliq AS (SELECT DATE_TRUNC('month', s.tarix)::date AS ay,
+                      t.kok_ad                           AS kok_ad,
+                      s.seher                            AS seher,
+                      SUM(s.mebleg)                      AS dovriyye
+               FROM satis s
+                        JOIN t_kok t ON t.kateqoriya_id = s.kateqoriya_id
+               GROUP BY 1, 2, 3),
+     umumi AS (SELECT SUM(dovriyye) AS umumi_dovriyye FROM ayliq)
+SELECT ay                                          AS ay,
+       kok_ad                                      AS kok_kateqoriya,
+       COALESCE(seher, 'Namelum')                  AS seher,
+       dovriyye                                    AS dovriyye,
+       ROUND(dovriyye * 100 / u.umumi_dovriyye, 1) AS faiz_payi
+FROM ayliq
+         CROSS JOIN umumi u
+ORDER BY ay, kok_ad;
+/* Ölçmə nəticəsi: satis cədvəli cəmi 24 sətirdir, ona görə iki variantın vaxtı demək olar eynidir
+   (hər ikisi 1 ms-in altında). TEMP variantı rekursiyanı bir dəfə hesablayır, CTE variantı isə
+   hesabat hər icra olunanda yenidən hesablayır.
+   Seçim: bu data həcmində CTE bəsdir. Rekursiya nəticəsi böyük olsaydı və ya hesabatda bir neçə
+   dəfə istifadə olunsaydı, TEMP cədvəl + indeks + ANALYZE üstün olardı. */
 
 
 -- 29-cu tapşırıq
--- `WHERE status = 'legv'` sorğusu üçün əvvəlcə tam indeks, sonra partial indeks qurun. İkisinin ölçüsünü və sorğu sürətini müqayisə edin. Partial indeks hansı halda məqsədəuyğundur? (2 bal)
--- İpucu: `pg_size_pretty(pg_relation_size('idx_ad'))`. Məlumatın 99%-i 'tamam'-dır.
+DROP MATERIALIZED VIEW IF EXISTS mv_seher_dovriyye;
+DROP VIEW IF EXISTS v_seher_dovriyye2;
 
--- Tam indeks: bütün 300 000 sətir indeksə düşür.
-create index idx_satis_log_status on magaza.satis_log (status);
+CREATE VIEW v_seher_dovriyye2 AS
+SELECT COALESCE(seher, 'Namelum') AS seher,
+       COUNT(*)                   AS satis_sayi,
+       SUM(mebleg)                AS dovriyye
+FROM satis
+GROUP BY COALESCE(seher, 'Namelum');
 
-analyze magaza.satis_log;
+CREATE MATERIALIZED VIEW mv_seher_dovriyye AS
+SELECT COALESCE(seher, 'Namelum') AS seher,
+       COUNT(*)                   AS satis_sayi,
+       SUM(mebleg)                AS dovriyye
+FROM satis
+GROUP BY COALESCE(seher, 'Namelum');
 
-select pg_size_pretty(pg_relation_size('magaza.idx_satis_log_status')) as tam_indeks_olcusu;
+-- Yeni satış əlavə olunur
+INSERT INTO satis
+VALUES (25, DATE '2024-09-03', 'Bakı', 100, 4, 101, 1000.00);
 
-explain (analyze, buffers)
-select *
-from magaza.satis_log
-where status = 'legv';
+-- VIEW dərhal yeni dəyəri göstərir, MATERIALIZED VIEW köhnə nəticəni saxlayır
+SELECT seher AS seher, dovriyye AS dovriyye
+FROM v_seher_dovriyye2
+WHERE seher = 'Bakı';
 
--- Partial indeks: yalnız status = 'legv' sətirləri indeksə düşür.
-drop index magaza.idx_satis_log_status;
+SELECT seher AS seher, dovriyye AS dovriyye
+FROM mv_seher_dovriyye
+WHERE seher = 'Bakı';
 
-create index idx_satis_log_status_legv on magaza.satis_log (status) where status = 'legv';
+REFRESH MATERIALIZED VIEW mv_seher_dovriyye;
 
-analyze magaza.satis_log;
+SELECT seher AS seher, dovriyye AS dovriyye
+FROM mv_seher_dovriyye
+WHERE seher = 'Bakı';
 
-select pg_size_pretty(pg_relation_size('magaza.idx_satis_log_status_legv')) as partial_indeks_olcusu;
+-- Data ilkin vəziyyətə qaytarılır
+DELETE
+FROM satis
+WHERE satis_id = 25;
+REFRESH MATERIALIZED VIEW mv_seher_dovriyye;
+/* Müşahidə: INSERT-dən sonra VIEW 21 575.29, MATERIALIZED VIEW isə köhnə 20 575.29 dəyərini
+   göstərdi. REFRESH-dən sonra hər ikisi 21 575.29 oldu.
+   İcra vaxtı: adi VIEW hər dəfə aqreqasiyanı yenidən hesablayır, MATERIALIZED VIEW isə hazır
+   sətirləri oxuyur, ona görə böyük datada daha sürətlidir.
+   Slayd 12-nin sualı: "Nəticə tez-tez oxunur, amma nadir hallarda dəyişirmi?" Bəli, buna görə
+   MATERIALIZED VIEW seçildi. */
 
-explain (analyze, buffers)
-select *
-from magaza.satis_log
-where status = 'legv';
 
--- İzah (partial indeks nə vaxt məqsədəuyğundur): tam indeks 2056 kB, partial indeks
--- 40 kB, yəni 50 dəfə kiçik, çünki məlumatın yalnız ~1%-i 'legv'-dir. Hər iki halda plan
--- Index Scan-dır və icra vaxtı eyni səviyyədə qalır (1.4 ms / 2.2 ms, fərq ölçmə
--- səs-küyüdür), yəni sürət eyni, qiymət isə dəfələrlə ucuzdur.
--- Partial indeks sorğuların yalnız kiçik və seçici hissəyə baxdığı hallarda
--- məqsədəuyğundur: həm yer, həm də hər INSERT/UPDATE-in qiyməti azalır.
-
+-- ============================================================
+-- I. Tranzaksiyalar, BEGIN, COMMIT, ROLLBACK
+-- ============================================================
 
 -- 30-cu tapşırıq
--- `WHERE UPPER(mehsul_adi) = 'MEHSUL 100'` sorğusu 26-cı tapşırıqda qurduğunuz indeksdən istifadə etmir. Səbəbini izah edin və iki fərqli həll yazın, ikisini də ölçün. (2 bal)
--- İpucu: Sütunun üzərinə funksiya tətbiq olunduqda indeks açarı ilə uyğunluq itir. Həll yollarından biri — ifadə üzrə indeks.
+SELECT hesab_id AS hesab_id,
+       sahib    AS sahib,
+       balans   AS kocurme_evveli
+FROM hesab
+WHERE hesab_id IN (1, 2)
+ORDER BY hesab_id;
 
--- 26-cı tapşırığın indeksi ilə plan yenə Seq Scan olur.
-analyze magaza.satis_log;
+BEGIN;
+UPDATE hesab
+SET balans = balans - 500
+WHERE hesab_id = 1;
+UPDATE hesab
+SET balans = balans + 500
+WHERE hesab_id = 2;
+COMMIT;
 
-explain (analyze, buffers)
-select *
-from magaza.satis_log
-where upper(mehsul_adi) = 'MEHSUL 100';
+SELECT hesab_id AS hesab_id,
+       sahib    AS sahib,
+       balans   AS kocurme_sonrasi
+FROM hesab
+WHERE hesab_id IN (1, 2)
+ORDER BY hesab_id;
 
--- Həll 1: ifadə üzrə indeks. İndeksə sütunun özü yox, upper(sütun) yazılır.
-create index idx_satis_log_mehsul_adi_upper on magaza.satis_log (upper(mehsul_adi));
+SELECT SUM(balans) AS umumi_balans
+FROM hesab;
+/* Müşahidə: 1-ci hesab 5000.00 > 4500.00, 2-ci hesab 1200.00 > 1700.00.
+   Ümumi balans 6500.00 olaraq dəyişmədi, çünki iki UPDATE bir bütöv kimi icra olundu. */
 
-analyze magaza.satis_log;
+-- Data ilkin vəziyyətə qaytarılır
+UPDATE hesab
+SET balans = 5000.00
+WHERE hesab_id = 1;
+UPDATE hesab
+SET balans = 1200.00
+WHERE hesab_id = 2;
 
-explain (analyze, buffers)
-select *
-from magaza.satis_log
-where upper(mehsul_adi) = 'MEHSUL 100';
-
--- Həll 2: hesablanan sütun + adi indeks. Sorğu artıq funksiya çağırmır.
-drop index magaza.idx_satis_log_mehsul_adi_upper;
-
-alter table magaza.satis_log
-    add column mehsul_adi_boyuk varchar(80) generated always as (upper(mehsul_adi)) stored;
-
-create index idx_satis_log_mehsul_adi_boyuk on magaza.satis_log (mehsul_adi_boyuk);
-
-analyze magaza.satis_log;
-
-explain (analyze, buffers)
-select *
-from magaza.satis_log
-where mehsul_adi_boyuk = 'MEHSUL 100';
-
--- İzah: B-tree indeksdə sütunun xam dəyərləri saxlanılır, upper(mehsul_adi) isə
--- funksiyanın nəticəsidir və indeks açarı ilə uyğun gəlmir, ona görə plan Seq Scan-a
--- düşür (57.9 ms). Həll 1 (ifadə üzrə indeks) 0.089 ms, Həll 2 (hesablanan sütun +
--- adi indeks) 0.137 ms. İkisi də işləyir: ifadə üzrə indeks sorğunu dəyişmədən həll
--- verir, hesablanan sütun isə əlavə yer tutur, amma sorğunu sadələşdirir.
-
-
--- =====================================================================
--- H. Çətin və qarışıq tapşırıqlar (31–40, 40 bal)
--- =====================================================================
 
 -- 31-ci tapşırıq
--- `SELECT seher, tarix FROM magaza.satis_log WHERE seher = 'Gəncə'` sorğusunu Index Only Scan ilə işlətməyə nail olun. Planda Heap Fetches sətrini tapın, dəyərini sıfıra endirin və bunun nə demək olduğunu izah edin. (4 bal)
--- İpucu: INCLUDE bəndi və ya kompozit indeks; sonra `VACUUM satis_log;` — görünürlük xəritəsi yenilənməlidir.
+BEGIN;
+UPDATE hesab
+SET balans = balans - 500
+WHERE hesab_id = 3;
+UPDATE hesab
+SET balans = balans + 500
+WHERE hesab_id = 2;
+ROLLBACK;
+/* Alınan xəta:
+   ERROR:  new row for relation "hesab" violates check constraint "hesab_balans_check"
+   DETAIL:  Failing row contains (3, Nigar Hüseynova, -200.00, AZN).
+   Birinci UPDATE xəta verdiyinə görə tranzaksiya abort vəziyyətinə keçdi, ikinci UPDATE
+   ümumiyyətlə icra olunmadı. */
 
--- tarix sütunu INCLUDE ilə indeksə əlavə olunur, beləcə sorğunun bütün sütunları indeksdədir.
-create index idx_satis_log_seher_tarix on magaza.satis_log (seher) include (tarix);
-
-analyze magaza.satis_log;
-
--- 30-cu tapşırıqdakı ALTER TABLE cədvəli yenidən yazıb, görünürlük xəritəsi boşdur.
--- Planı Index Only Scan-a məcbur edirik ki, Heap Fetches sətri görünsün.
-set enable_bitmapscan = off;
-set enable_seqscan = off;
-
-explain (analyze, buffers)
-select seher, tarix
-from magaza.satis_log
-where seher = 'Gəncə';
-
--- VACUUM görünürlük xəritəsini yeniləyir.
-vacuum magaza.satis_log;
-
-explain (analyze, buffers)
-select seher, tarix
-from magaza.satis_log
-where seher = 'Gəncə';
-
-reset enable_bitmapscan;
-reset enable_seqscan;
-
--- İzah (Heap Fetches = 0 nə deməkdir): sorğunun hər iki sütunu indeksdədir (seher açar,
--- tarix INCLUDE), ona görə plan Index Only Scan ola bilir. VACUUM-dan əvvəl görünürlük
--- xəritəsi boş idi və baza hər sətrin görünən olduğunu yoxlamaq üçün cədvələ getdi:
--- Heap Fetches 60 000, 3704 blok, 12.3 ms. VACUUM xəritəni yeniləyəndən sonra
--- Heap Fetches = 0, yəni cədvəl ümumiyyətlə oxunmur (234 blok, 5.6 ms).
--- Yəni Heap Fetches = 0 o deməkdir ki, sorğu tam olaraq indeksdən cavablanır.
+-- Sübut: heç bir balans dəyişməyib
+SELECT hesab_id AS hesab_id,
+       balans   AS balans
+FROM hesab
+ORDER BY hesab_id;
+-- Müşahidə: 1 = 5000.00, 2 = 1200.00, 3 = 300.00, 4 = 0.00, yəni yarım köçürmə qalmadı.
 
 
 -- 32-ci tapşırıq
--- `ORDER BY mebleg DESC LIMIT 20` sorğusunda sıralamanın indeks hesabına aparıldığını sübut edin — planda Sort düyünü olmamalıdır. Sonra eyni nəticəni `ORDER BY mebleg DESC NULLS LAST` üçün əldə edin. (4 bal)
--- İpucu: İndeks öz sıralama qaydası ilə yaradılır: `CREATE INDEX ... (mebleg DESC NULLS LAST)`.
+-- Sessiya A
+BEGIN;
+UPDATE hesab
+SET balans = 9999.00
+WHERE hesab_id = 1;
+-- COMMIT hələ edilmir, tranzaksiya açıq saxlanılır
 
--- İndekssiz plan: Sort + Limit.
-analyze magaza.satis_log;
+-- Sessiya B (ayrı bağlantı)
+-- SELECT hesab_id, balans FROM hesab WHERE hesab_id = 1;
+-- Müşahidə: balans = 5000.00, yəni B köhnə dəyəri görür.
 
-explain (analyze, buffers)
-select *
-from magaza.satis_log
-order by mebleg desc
-limit 20;
+-- Sessiya A
+COMMIT;
 
--- DESC indeks (standart NULLS FIRST).
-create index idx_satis_log_mebleg_desc on magaza.satis_log (mebleg desc);
+-- Sessiya B
+-- SELECT hesab_id, balans FROM hesab WHERE hesab_id = 1;
+-- Müşahidə: balans = 9999.00, yəni COMMIT-dən sonra yeni dəyər görünür.
+/* İzah: tranzaksiya açıq olduğu müddətdə etdiyi dəyişikliklər yalnız öz daxilində görünür.
+   Digər sessiyalar MVCC sayəsində sətrin köhnə versiyasını oxuyur. Yarımçıq iş heç kimə
+   görünmür, ona görə "ara vəziyyət görünmür" deyilir. */
 
-analyze magaza.satis_log;
+-- Data ilkin vəziyyətə qaytarılır
+UPDATE hesab
+SET balans = 5000.00
+WHERE hesab_id = 1;
 
-explain (analyze, buffers)
-select *
-from magaza.satis_log
-order by mebleg desc
-limit 20;
 
--- NULLS LAST sıralaması yuxarıdakı indekslə uyğun gəlmir, ayrıca indeks lazımdır.
-explain (analyze, buffers)
-select *
-from magaza.satis_log
-order by mebleg desc nulls last
-limit 20;
-
-create index idx_satis_log_mebleg_desc_nulls_last on magaza.satis_log (mebleg desc nulls last);
-
-analyze magaza.satis_log;
-
-explain (analyze, buffers)
-select *
-from magaza.satis_log
-order by mebleg desc nulls last
-limit 20;
-
--- İzah: indekssiz plan Sort düyünü saxlayır (top-N heapsort) və 300 000 sətri oxuyur:
--- 37.2 ms. (mebleg DESC) indeksi sətirləri artıq lazımi sırada saxlayır, ona görə plan
--- Index Scan + Limit olur, Sort yoxdur: 0.031 ms.
--- NULLS LAST isə başqa sıralamadır: DESC indeksin standartı NULLS FIRST-dür, ona görə
--- köhnə indeks yaramır və Sort geri qayıdır (35.4 ms). Ayrıca (mebleg DESC NULLS LAST)
--- indeksindən sonra Sort yenidən itir: 0.049 ms.
-
+-- ============================================================
+-- J. SAVEPOINT, qismən geri qayıtma
+-- ============================================================
 
 -- 33-cü tapşırıq
--- Hesabat sorğusu: satis_log-un bütün indekslərini ölçüsü, ölçünün cədvələ nisbəti (faizlə, 1 rəqəm) və indeksin tərifi ilə birlikdə sadalayın. Ölçüyə görə azalan sıra. Ən «bahalı» indeks hansıdır? (4 bal)
--- İpucu: `pg_indexes` + `pg_relation_size()` + `pg_size_pretty()`.
+BEGIN;
+INSERT INTO kocurme_log (hesab_id, emeliyyat, mebleg, qeyd)
+VALUES (1, 'cixaris', 100.00, 'birinci setir');
 
-select indexname                                                        as indeks,
-       pg_size_pretty(pg_relation_size(schemaname || '.' || indexname)) as olcu,
-       round(100.0 * pg_relation_size(schemaname || '.' || indexname)
-                 / pg_relation_size(schemaname || '.' || tablename), 1) as cedvele_nisbeti_faiz,
-       indexdef                                                         as terif
-from pg_indexes
-where schemaname = 'magaza'
-  and tablename = 'satis_log'
-order by pg_relation_size(schemaname || '.' || indexname) desc;
+SAVEPOINT sp1;
 
--- Ən bahalı indeks idx_satis_log_seher_tarix-dir: 9272 kB, cədvəlin 31.2%-i.
--- Səbəb: INCLUDE bəndi ilə tarix sütunu da indeksə yazılır, yəni indeks iki sütunun
--- məlumatını saxlayır. Ondan sonra iki mebleg indeksi gəlir (6608 kB, 22.3%),
--- ən ucuzu isə partial indeksdir: 40 kB (0.1%).
+INSERT INTO kocurme_log (hesab_id, emeliyyat, mebleg, qeyd)
+VALUES (1, 'sehv', -999.00, 'sehv setir');
+
+ROLLBACK TO SAVEPOINT sp1;
+
+INSERT INTO kocurme_log (hesab_id, emeliyyat, mebleg, qeyd)
+VALUES (2, 'medaxil', 100.00, 'duzgun setir');
+COMMIT;
+
+SELECT log_id    AS log_id,
+       hesab_id  AS hesab_id,
+       emeliyyat AS emeliyyat,
+       mebleg    AS mebleg,
+       qeyd      AS qeyd
+FROM kocurme_log
+ORDER BY log_id;
+/* Müşahidə: cədvəldə iki sətir qaldı, "birinci setir" və "duzgun setir".
+   "sehv setir" ROLLBACK TO SAVEPOINT ilə geri alındı.
+   SAVEPOINT heç nəyi COMMIT etmir, tranzaksiya COMMIT-ə qədər açıq qalır.
+   Qeyd: log_id SERIAL olduğu üçün geri alınan sətrin nömrəsi itir, bu normal davranışdır. */
+
+DELETE
+FROM kocurme_log;
 
 
 -- 34-cü tapşırıq
--- Heç vaxt istifadə olunmayan indeksləri aşkarlayın: əvvəlcə statistikanı sıfırlayın, sonra 5–6 müxtəlif SELECT icra edin, sonra hər indeks üçün skan sayını göstərən hesabat çıxarın və `idx_scan = 0` olanları işarələyin. (4 bal)
--- İpucu: `SELECT pg_stat_reset();` + `pg_stat_user_indexes`.
+-- Qoruyucusuz variant
+BEGIN;
+SELECT 1 / 0;
+SELECT 1 AS normal_emr;
+ROLLBACK;
+/* Alınan xətalar:
+   ERROR:  division by zero
+   ERROR:  current transaction is aborted, commands ignored until end of transaction block
+   İzah: PostgreSQL-də tranzaksiya daxilində bir xəta bütün tranzaksiyanı abort vəziyyətinə salır,
+   ondan sonrakı əmrlər ROLLBACK-ə qədər qəbul olunmur. */
 
-select pg_stat_reset();
-
--- 5 müxtəlif SELECT. mehsul_adi_boyuk sütununa heç bir sorğu getmir, ona görə onun indeksinin
--- skan sayı sıfır qalmalıdır.
-select count(*)
-from magaza.satis_log
-where mehsul_adi = 'Mehsul 4321';
-select count(*)
-from magaza.satis_log
-where kateqoriya = 'Texnika';
-select count(*)
-from magaza.satis_log
-where status = 'legv';
-select seher, tarix
-from magaza.satis_log
-where seher = 'Gəncə'
-limit 10;
-select id, mebleg
-from magaza.satis_log
-order by mebleg desc
-limit 20;
-
--- Statistika bir qədər gecikmə ilə yazılır, ona görə hesabatdan əvvəl gözləyirik.
-select pg_sleep(1);
-
--- Skan sayı hesabatı.
-select indexrelname                                                      as indeks,
-       idx_scan                                                          as skan_sayi,
-       case when idx_scan = 0 then 'İstifadə olunmur' else 'İşləyir' end as qeyd
-from pg_stat_user_indexes
-where schemaname = 'magaza'
-  and relname = 'satis_log'
-order by idx_scan, indexrelname;
-
--- İzah: 5 SELECT-dən sonra altı indeksin skan sayı ≥ 1-dir, idx_satis_log_mehsul_adi_boyuk
--- isə 0 qalıb, çünki heç bir sorğu o sütuna baxmadı. idx_scan = 0 olan indeks yer tutur və
--- hər INSERT/UPDATE-i yavaşladır, faydası isə yoxdur, yəni silinməyə namizəddir.
--- Qeyd: statistika pg_stat_reset()-dən sonrakı dövrü göstərir, ona görə qərar verməzdən
--- əvvəl real yük altında kifayət qədər uzun müddət yığılmalıdır.
+-- SAVEPOINT ilə tranzaksiyanı xilas edən variant
+BEGIN;
+SELECT 1 AS birinci_emr;
+SAVEPOINT sp_xeta;
+SELECT 1 / 0;
+ROLLBACK TO SAVEPOINT sp_xeta;
+SELECT 1 AS normal_emr;
+COMMIT;
+-- Müşahidə: ROLLBACK TO SAVEPOINT-dən sonra tranzaksiya yenidən işlək oldu və COMMIT alındı.
 
 
 -- 35-ci tapşırıq
--- `WHERE mehsul_adi LIKE '%hsul 4321%'` sorğusunu sürətləndirin. Adi B-tree indeks burada kömək etmir — səbəbini izah edin və işləyən həlli qurub ölçün. (4 bal)
--- İpucu: `CREATE EXTENSION pg_trgm;` + `USING GIN (mehsul_adi gin_trgm_ops)`.
+-- Beş köçürmə, onlardan ikisi CHECK-i pozur (3-cü hesabda 300, 4-cü hesabda 0 balans var).
+BEGIN;
 
--- B-tree indeks var (26-cı tapşırıq), amma plan yenə Seq Scan-dır.
-analyze magaza.satis_log;
+SAVEPOINT sp_1;
+UPDATE hesab
+SET balans = balans - 1000
+WHERE hesab_id = 1;
 
-explain (analyze, buffers)
-select *
-from magaza.satis_log
-where mehsul_adi like '%hsul 4321%';
+SAVEPOINT sp_2;
+UPDATE hesab
+SET balans = balans - 500
+WHERE hesab_id = 3;
+ROLLBACK TO SAVEPOINT sp_2;
+-- CHECK pozuldu, yalnız bu sətir atlanır
 
-create extension if not exists pg_trgm;
+SAVEPOINT sp_3;
+UPDATE hesab
+SET balans = balans - 200
+WHERE hesab_id = 2;
 
-create index idx_satis_log_mehsul_adi_trgm on magaza.satis_log using gin (mehsul_adi gin_trgm_ops);
+SAVEPOINT sp_4;
+UPDATE hesab
+SET balans = balans - 50
+WHERE hesab_id = 4;
+ROLLBACK TO SAVEPOINT sp_4;
+-- CHECK pozuldu, bu sətir də atlanır
 
-analyze magaza.satis_log;
+SAVEPOINT sp_5;
+UPDATE hesab
+SET balans = balans - 2000
+WHERE hesab_id = 1;
 
-explain (analyze, buffers)
-select *
-from magaza.satis_log
-where mehsul_adi like '%hsul 4321%';
+COMMIT;
 
--- İzah (B-tree niyə kömək etmir): B-tree dəyərləri baş hərfdən sıralayır və axtarışa
--- məhz əvvəldən başlayır. '%hsul 4321%' şablonunda sətrin əvvəli bilinmir, ona görə
--- indeksdə başlanğıc nöqtə yoxdur və plan Seq Scan olur: 21.6 ms.
--- pg_trgm GIN indeksi mətni 3 hərflik parçalara (trigram) bölür və hər parça üçün
--- sətir siyahısı saxlayır, ona görə ortadan axtarış da indekslə gedir: 2.6 ms,
--- təqribən 8 dəfə sürətli.
+SELECT hesab_id AS hesab_id,
+       balans   AS balans
+FROM hesab
+ORDER BY hesab_id;
+-- Müşahidə: 1 = 2000.00, 2 = 1000.00, 3 = 300.00, 4 = 0.00. Üç düzgün sətir yazıldı.
 
+-- Data ilkin vəziyyətə qaytarılır
+UPDATE hesab
+SET balans = 5000.00
+WHERE hesab_id = 1;
+UPDATE hesab
+SET balans = 1200.00
+WHERE hesab_id = 2;
+
+-- Eyni məntiq PL/pgSQL EXCEPTION bloku ilə
+DO
+$$
+    DECLARE
+        v_setir RECORD;
+    BEGIN
+        FOR v_setir IN SELECT * FROM (VALUES (1, 1000), (3, 500), (2, 200), (4, 50), (1, 2000)) AS t(hesab, mebleg)
+            LOOP
+                BEGIN
+                    UPDATE hesab SET balans = balans - v_setir.mebleg WHERE hesab_id = v_setir.hesab;
+                EXCEPTION
+                    WHEN check_violation THEN
+                        RAISE NOTICE 'Atlandi: hesab %, mebleg %', v_setir.hesab, v_setir.mebleg;
+                END;
+            END LOOP;
+    END
+$$;
+
+SELECT hesab_id AS hesab_id,
+       balans   AS balans
+FROM hesab
+ORDER BY hesab_id;
+/* Hər BEGIN ... EXCEPTION ... END bloku daxilən gizli savepoint yaradır, yəni PL/pgSQL variantı
+   əl ilə yazdığımız SAVEPOINT məntiqinin eynisini edir. Ucuz əməliyyat deyil, ona görə
+   döngə içində EXCEPTION bloku yazmaq performansa təsir edir. */
+
+-- Data ilkin vəziyyətə qaytarılır
+UPDATE hesab
+SET balans = 5000.00
+WHERE hesab_id = 1;
+UPDATE hesab
+SET balans = 1200.00
+WHERE hesab_id = 2;
+
+
+-- ============================================================
+-- K. Autocommit, DDL və uzun tranzaksiyalar
+-- ============================================================
 
 -- 36-cı tapşırıq
--- İndeksin yazma əməliyyatına qiymətini ölçün: (a) bütün indeksləri silin, 100 000 sətir INSERT edin, vaxtı qeyd edin; (b) 5 indeks qurun, əlavə etdiyiniz sətirləri silin, eyni INSERT-i təkrarlayın. Fərqi faizlə göstərin və bir cümləlik nəticə yazın. (4 bal)
+-- Təhlükəli variant, açıq tranzaksiya yoxdur
+UPDATE anbar
+SET qaliq = qaliq + 10;
+-- Müşahidə: UPDATE 5, yəni bütün 5 sətir dəyişdi.
 
--- (a) satis_log-un bütün indekslərini silirik.
-drop index if exists magaza.idx_satis_log_mehsul_adi;
-drop index if exists magaza.idx_satis_log_kateqoriya_tarix;
-drop index if exists magaza.idx_satis_log_status_legv;
-drop index if exists magaza.idx_satis_log_mehsul_adi_boyuk;
-drop index if exists magaza.idx_satis_log_seher_tarix;
-drop index if exists magaza.idx_satis_log_mebleg_desc;
-drop index if exists magaza.idx_satis_log_mebleg_desc_nulls_last;
-drop index if exists magaza.idx_satis_log_mehsul_adi_trgm;
+ROLLBACK;
+/* Müşahidə: WARNING:  there is no transaction in progress
+   İzah: autocommit açıq olduğuna görə UPDATE artıq öz-özünə COMMIT olunub, ROLLBACK kömək etmir. */
 
--- İndekssiz 100 000 INSERT. Vaxtı EXPLAIN ANALYZE-ın Execution Time sətrindən götürürük.
-explain (analyze)
-insert into magaza.satis_log (id, musteri_kodu, mehsul_adi, kateqoriya, seher, status, miqdar, mebleg, tarix)
-select i,
-       (random() * 20000)::int + 1,
-       'Mehsul ' || (i % 5000),
-       (array ['Texnika', 'Aksesuar', 'Ofis', 'Mebel', 'Kitab'])[(i % 5) + 1],
-       (array ['Bakı','Gəncə','Sumqayıt','Şəki','Lənkəran'])[(i % 5) + 1],
-       case when i % 97 = 0 then 'legv' else 'tamam' end,
-       (random() * 10)::int + 1,
-       (random() * 5000 + 10)::numeric(12, 2),
-       date '2022-01-01' + (i % 1000)
-from generate_series(300001, 400000) as i;
+-- Data əl ilə bərpa olunur
+UPDATE anbar
+SET qaliq = qaliq - 10;
 
--- (b) 5 indeks qururuq və əlavə etdiyimiz sətirləri silirik.
-delete
-from magaza.satis_log
-where id > 300000;
+-- Təhlükəsiz vərdiş
+BEGIN;
+SELECT COUNT(*) AS deyisecek_setir
+FROM anbar
+WHERE mehsul_id = 1;
+UPDATE anbar
+SET qaliq = qaliq + 10
+WHERE mehsul_id = 1;
+SELECT mehsul_id AS mehsul_id, qaliq AS qaliq
+FROM anbar
+WHERE mehsul_id = 1;
+ROLLBACK;
 
-create index idx_satis_log_mehsul_adi on magaza.satis_log (mehsul_adi);
-create index idx_satis_log_kateqoriya_tarix on magaza.satis_log (kateqoriya, tarix);
-create index idx_satis_log_seher on magaza.satis_log (seher);
-create index idx_satis_log_mebleg on magaza.satis_log (mebleg);
-create index idx_satis_log_tarix on magaza.satis_log (tarix);
-
-analyze magaza.satis_log;
-
--- Eyni INSERT, indi 5 indeks də yenilənir.
-explain (analyze)
-insert into magaza.satis_log (id, musteri_kodu, mehsul_adi, kateqoriya, seher, status, miqdar, mebleg, tarix)
-select i,
-       (random() * 20000)::int + 1,
-       'Mehsul ' || (i % 5000),
-       (array ['Texnika', 'Aksesuar', 'Ofis', 'Mebel', 'Kitab'])[(i % 5) + 1],
-       (array ['Bakı','Gəncə','Sumqayıt','Şəki','Lənkəran'])[(i % 5) + 1],
-       case when i % 97 = 0 then 'legv' else 'tamam' end,
-       (random() * 10)::int + 1,
-       (random() * 5000 + 10)::numeric(12, 2),
-       date '2022-01-01' + (i % 1000)
-from generate_series(300001, 400000) as i;
-
--- Fərq (%) və nəticə: (a) indekssiz 100 000 INSERT 192.7 ms; (b) 5 indekslə
--- 1163.8 ms. Fərq +504%, yəni təqribən 6 dəfə yavaş.
--- Nəticə: hər indeks oxunuşu sürətləndirir, amma yazılışın qiymətini artırır. Kütləvi
--- yükləmədə indeksləri əvvəlcə silib, yükləmədən sonra qurmaq daha sərfəlidir.
+SELECT mehsul_id AS mehsul_id, qaliq AS qaliq
+FROM anbar
+ORDER BY mehsul_id;
+-- Müşahidə: ROLLBACK-dən sonra qaliq yenə 24, yəni açıq tranzaksiyada səhvi geri almaq mümkündür.
 
 
 -- 37-ci tapşırıq
--- satis_log-a PRIMARY KEY əlavə edin, sonra ona FK ilə bağlı satis_qeyd cədvəli yaradıb 200 000 sətir doldurun. FK sütununa indeks qurmadan valideyn cədvəldən sətir silin və vaxtı ölçün; sonra indeks qurub təkrarlayın. PostgreSQL FK sütununa avtomatik indeks yaradırmı? (4 bal)
--- İpucu: Valideyn sətri silinəndə baza uşaq cədvəldə istinadları axtarmalıdır — indeks yoxdursa bu, tam skan deməkdir.
-
-alter table magaza.satis_log
-    add constraint pk_satis_log primary key (id);
-
-drop table if exists magaza.satis_qeyd;
-
-create table magaza.satis_qeyd
+BEGIN;
+CREATE TABLE ddl_test
 (
-    id       int generated always as identity,
-    satis_id int,
-    qeyd     varchar(50),
-    constraint pk_satis_qeyd primary key (id),
-    constraint fk_satis_qeyd_satis foreign key (satis_id) references magaza.satis_log (id)
+    id INT
 );
+ALTER TABLE ddl_test
+    ADD COLUMN ad VARCHAR(20);
+ROLLBACK;
 
-insert into magaza.satis_qeyd (satis_id, qeyd)
-select i, 'Qeyd ' || i
-from generate_series(1, 200000) as i;
-
-analyze magaza.satis_qeyd;
-
--- FK sütununda indeks yoxdur: uşaq cədvəldə istinad axtarışı tam skandır.
--- Silinən sətrin uşağı yoxdur, ona görə ölçdüyümüz məhz yoxlamanın qiymətidir.
-explain (analyze)
-delete
-from magaza.satis_log
-where id = 400000;
-
--- İndi FK sütununa indeks qururuq.
-create index idx_satis_qeyd_satis_id on magaza.satis_qeyd (satis_id);
-
-analyze magaza.satis_qeyd;
-
-explain (analyze)
-delete
-from magaza.satis_log
-where id = 399999;
-
--- İzah (PostgreSQL FK sütununa avtomatik indeks yaradırmı): xeyr. Avtomatik indeks
--- yalnız PRIMARY KEY və UNIQUE üçün qurulur; xarici açarın öz sütunu indekssiz qalır.
--- Ona görə valideyn sətri silinəndə uşaq cədvəldə istinad axtarışı tam skana çevrilir:
--- planda «Trigger for constraint fk_satis_qeyd_satis: time=8.144 ms».
--- FK sütununa indeks quranda həmin yoxlama 0.131 ms olur, yəni ~60 dəfə sürətlidir.
+SELECT COUNT(*) AS ddl_test_var
+FROM pg_tables
+WHERE tablename = 'ddl_test';
+/* Müşahidə: ddl_test_var = 0, yəni cədvəl yox oldu.
+   PostgreSQL-də DDL tranzaksiyaya daxildir, ROLLBACK CREATE və ALTER-i də geri alır.
+   MySQL-də isə CREATE, ALTER və DROP açıq tranzaksiyanı avtomatik COMMIT edir (implicit commit),
+   ona görə orada ROLLBACK artıq kömək etmir. Praktiki nəticə: MySQL-də miqrasiya skriptləri
+   yarımçıq qala bilər və geri qaytarma skripti əl ilə yazılmalıdır. */
 
 
 -- 38-ci tapşırıq
--- `WHERE kateqoriya = 'Ofis' AND seher = 'Bakı'` sorğusunu iki konfiqurasiyada müqayisə edin: (a) iki ayrı bir-sütunlu indeks, (b) bir kompozit indeks (kateqoriya, seher). Planda BitmapAnd görünürmü? Hansı variant daha sürətlidir və niyə? (4 bal)
+-- Sessiya A
+BEGIN;
+UPDATE hesab
+SET balans = balans - 1
+WHERE hesab_id = 1;
+-- tranzaksiya açıq saxlanılır
 
--- (a) iki ayrı bir-sütunlu indeks (idx_satis_log_seher 36-cı tapşırıqda quruldu).
-drop index if exists magaza.idx_satis_log_kateqoriya_tarix;
+-- Sessiya B (ayrı bağlantı)
+-- UPDATE hesab SET balans = balans - 1 WHERE hesab_id = 1;
+-- Müşahidə: əmr cavab vermir, gözləməyə keçir.
 
-create index idx_satis_log_kateqoriya on magaza.satis_log (kateqoriya);
+-- Sessiya C və ya A, bloklayan sessiyanı tapmaq üçün
+SELECT pid                   AS pid,
+       state                 AS veziyyet,
+       wait_event_type       AS gozleme_tipi,
+       pg_blocking_pids(pid) AS bloklayan_pidler,
+       query                 AS sorgu
+FROM pg_stat_activity
+WHERE state <> 'idle'
+  AND datname = 'lesson1';
 
-analyze magaza.satis_log;
+SELECT locktype           AS lock_tipi,
+       relation::regclass AS obyekt,
+       mode               AS rejim,
+       granted            AS verilib
+FROM pg_locks
+WHERE relation = 'hesab'::regclass;
+/* Müşahidə: B sessiyasının sətrində wait_event_type = 'Lock' və pg_blocking_pids A sessiyasının
+   pid-ini qaytarır. A-da COMMIT edən kimi B-nin UPDATE-i dərhal tamamlanır.
+   Table bloat: A açıq qaldığı müddətdə VACUUM həmin sətrin köhnə versiyalarını təmizləyə bilmir,
+   çünki açıq tranzaksiya hələ də onları görə bilər. Uzun tranzaksiyalar bu səbəbdən cədvəlin
+   fiziki ölçüsünü şişirdir. */
 
-explain (analyze, buffers)
-select *
-from magaza.satis_log
-where kateqoriya = 'Ofis'
-  and seher = 'Bakı';
+-- Sessiya A
+ROLLBACK;
 
--- (b) bir kompozit indeks.
-drop index magaza.idx_satis_log_kateqoriya;
-drop index magaza.idx_satis_log_seher;
 
-create index idx_satis_log_kateqoriya_seher on magaza.satis_log (kateqoriya, seher);
-
-analyze magaza.satis_log;
-
-explain (analyze, buffers)
-select *
-from magaza.satis_log
-where kateqoriya = 'Ofis'
-  and seher = 'Bakı';
-
--- İzah (BitmapAnd, hansı daha sürətli və niyə): (a) iki ayrı indeksdə planda BitmapAnd
--- görünür: baza hər indeksdən bitmap qurur (80 000 + 80 000 sətir) və kəsişməni alır,
--- icra 2.598 ms. (b) kompozit indeksdə BitmapAnd yoxdur, tək Bitmap Index Scan hər iki
--- şərti birlikdə tətbiq edir: 0.023 ms, ~100 dəfə sürətlidir.
--- Səbəb: kompozit indeks kəsişməni əvvəlcədən hazır saxlayır, iki ayrı indeks isə
--- əvvəlcə iki böyük bitmap qurub sonra birləşdirməlidir.
--- Qeyd: bu məlumatda kateqoriya və seher eyni düsturla (i % 5) yaradılıb, ona görə
--- 'Ofis' + 'Bakı' cütü heç bir sətirdə yoxdur (rows=0), ona görə müqayisə planın qiymətinə görədir.
-
+-- ============================================================
+-- L. ACID, dörd zəmanət
+-- ============================================================
 
 -- 39-cu tapşırıq
--- İndeksin ölçüsünü qeyd edin, sonra cədvəlin təxminən 40%-ni UPDATE edin və ölçüyə yenidən baxın. Ölçü niyə artdı? n_dead_tup dəyərini göstərin, REINDEX icra edib fərqi cədvəldə təqdim edin. (4 bal)
--- İpucu: Şişmə (bloat), MVCC və ölü sətirlər. `pg_stat_user_tables`.
+BEGIN;
+UPDATE hesab
+SET balans = balans - 100
+WHERE hesab_id = 1;
+SELECT balans AS birinci_updateden_sonra
+FROM hesab
+WHERE hesab_id = 1;
+UPDATE hesab
+SET balans = balans - 100000
+WHERE hesab_id = 2;
+ROLLBACK;
 
--- Təmiz başlanğıc: 36-cı tapşırıqdakı silinmə indeksdə boş yer qoyub, ona görə
--- ölçməyə başlamazdan əvvəl indeksi yenidən qurub cədvəli təmizləyirik.
-reindex index magaza.idx_satis_log_mebleg;
-vacuum magaza.satis_log;
-
--- UPDATE-dən əvvəl.
-select pg_size_pretty(pg_relation_size('magaza.idx_satis_log_mebleg')) as indeks_olcusu,
-       n_dead_tup                                                      as olu_setirler
-from pg_stat_user_tables
-where schemaname = 'magaza'
-  and relname = 'satis_log';
-
--- Cədvəlin təxminən 40%-i (id % 5 < 2).
-update magaza.satis_log
-set mebleg = mebleg + 1
-where id % 5 < 2;
-
-analyze magaza.satis_log;
-
-select pg_size_pretty(pg_relation_size('magaza.idx_satis_log_mebleg')) as indeks_olcusu,
-       n_dead_tup                                                      as olu_setirler
-from pg_stat_user_tables
-where schemaname = 'magaza'
-  and relname = 'satis_log';
-
-reindex index magaza.idx_satis_log_mebleg;
-
-select pg_size_pretty(pg_relation_size('magaza.idx_satis_log_mebleg')) as indeks_olcusu
-from pg_stat_user_tables
-where schemaname = 'magaza'
-  and relname = 'satis_log';
-
--- İzah (bloat, MVCC, ölü sətirlər): UPDATE-dən əvvəl indeks 8800 kB, n_dead_tup = 0.
--- Cədvəlin ~40%-ni (159 999 sətir) UPDATE-dən sonra indeks 17 MB, n_dead_tup = 159 999.
--- Səbəb MVCC-dir: UPDATE sətri yerində dəyişmir, köhnə versiyanı ölü sətir kimi saxlayır
--- və yeni versiya yazır. İndekslənmiş sütun (mebleg) dəyişdiyi üçün indeksə də yeni giriş
--- düşür, köhnəsi isə dərhal getmir, nəticədə indeks şişir (bloat).
--- REINDEX indeksi sıfırdan qurur və ölçü 8800 kB-a qayıdır.
+SELECT hesab_id AS hesab_id,
+       balans   AS balans
+FROM hesab
+WHERE hesab_id IN (1, 2)
+ORDER BY hesab_id;
+/* Müşahidə: tranzaksiya daxilində 1-ci hesab 4900.00 idi, ROLLBACK-dən sonra yenə 5000.00 oldu.
+   İkinci UPDATE CHECK-i pozdu və birinci UPDATE də geri qayıtdı.
+   Mexanizm: PostgreSQL MVCC ilə sətrin köhnə versiyasını saxlayır, ROLLBACK yeni versiyanı
+   sadəcə etibarsız elan edir. */
 
 
 -- 40-cı tapşırıq
--- Yekun audit sorğusu. Sxeminizdəki hər cədvəl üçün bir sətir: cədvəl adı, təxmini sətir sayı, cədvəl ölçüsü, indeks sayı, indekslərin ümumi ölçüsü, PRIMARY KEY-in olub-olmaması (Var / Yoxdur) və status — PK yoxdursa Problemli, indekslərin ölçüsü cədvəlin 50%-dən çoxdursa Nezaret lazimdir, qalanı Normal. Cədvəl ölçüsünə görə azalan sıra. (4 bal)
--- İpucu: `pg_class` / `pg_stat_user_tables` + alt-sorğular + CASE + `pg_total_relation_size`. Məhdudiyyət, indeks, ölçü və şərti ifadələr — hamısı bir sorğuda.
+ALTER TABLE kocurme_log
+    ADD CONSTRAINT fk_kocurme_log_hesab
+        FOREIGN KEY (hesab_id) REFERENCES hesab (hesab_id);
 
--- reltuples yalnız ANALYZE-dan sonra dolur.
-analyze;
+-- FK pozuntusu
+INSERT INTO kocurme_log (hesab_id, emeliyyat, mebleg, qeyd)
+VALUES (999, 'test', 10.00, 'olmayan hesab');
+/* ERROR:  insert or update on table "kocurme_log" violates foreign key constraint "fk_kocurme_log_hesab"
+   DETAIL:  Key (hesab_id)=(999) is not present in table "hesab".
+   Mexanizm: FOREIGN KEY, uşaq cədvəldəki dəyərin valideyn cədvəldə mövcudluğunu yoxlayır. */
 
-select c.relname                               as cedvel,
-       c.reltuples::bigint                     as setir_sayi,
-       pg_size_pretty(pg_relation_size(c.oid)) as cedvel_olcusu,
-       (select count(*)
-        from pg_index i
-        where i.indrelid = c.oid)              as indeks_sayi,
-       pg_size_pretty(pg_indexes_size(c.oid))  as indekslerin_olcusu,
-       case
-           when exists (select 1
-                        from pg_constraint k
-                        where k.conrelid = c.oid
-                          and k.contype = 'p')
-               then 'Var'
-           else 'Yoxdur'
-           end                                 as primary_key,
-       case
-           when not exists (select 1
-                            from pg_constraint k
-                            where k.conrelid = c.oid
-                              and k.contype = 'p')
-               then 'Problemli'
-           when pg_indexes_size(c.oid) > pg_relation_size(c.oid) * 0.5
-               then 'Nezaret lazimdir'
-           else 'Normal'
-           end                                 as status
-from pg_class c
-         join pg_namespace n on n.oid = c.relnamespace
-where n.nspname = 'magaza'
-  and c.relkind = 'r'
-order by pg_relation_size(c.oid) desc;
+-- CHECK pozuntusu
+UPDATE hesab
+SET balans = -50
+WHERE hesab_id = 1;
+/* ERROR:  new row for relation "hesab" violates check constraint "hesab_balans_check"
+   DETAIL:  Failing row contains (1, Aysel Məmmədova, -50.00, AZN).
+   Mexanizm: CHECK, sətrin öz dəyərlərinə qoyulan məntiqi şərti yoxlayır.
+   Consistency: tranzaksiya bazanı bir doğru vəziyyətdən digər doğru vəziyyətə keçirir,
+   qaydanı pozan dəyişiklik ümumiyyətlə qəbul edilmir. */
 
--- Nəticə: 'Problemli' statuslu cədvəl yoxdur, hamısının PRIMARY KEY-i var.
--- satis_log (54 MB cədvəl, 40 MB indeks) və satis_qeyd 'Nezaret lazimdir' statusundadır,
--- yəni indekslər cədvəlin yarısından çox yer tutur. Bu, 36-cı tapşırıqda qurulan 5 indeksin
--- qiymətidir. Kiçik cədvəllər (kateqoriya, mehsul, musteri, sifaris, sifaris_detal) 8 KB-dır
--- və bir neçə indeks saxlayır, ona görə nisbət formal olaraq 50%-i keçir, amma bu həcmdə
--- praktiki mənası yoxdur.
+
+-- 41-ci tapşırıq
+SHOW fsync;
+SHOW synchronous_commit;
+SHOW wal_level;
+/* Müşahidə:
+   fsync = on
+   synchronous_commit = on
+   wal_level = replica
+
+   synchronous_commit = off edildikdə Durability zəmanəti itir: COMMIT cavabı qayıtsa da,
+   WAL yazısı hələ diskə fsync olunmamış ola bilər. Server elektriki kəsilsə son bir neçə
+   tranzaksiya itə bilər (baza korlanmır, yalnız sonuncu commitlər itir).
+   Qazanc: COMMIT diskin cavabını gözləmədiyinə görə yazma əməliyyatları xeyli sürətlənir.
+   Məqbul olduğu sistemlər: log yığan, metrik toplayan, analitik və ya keş xarakterli bazalar,
+   yəni bir neçə saniyəlik datanın itməsi problem olmayan yerlər. Bank və ödəniş sistemlərində
+   bu parametr off edilməz. */
+
+
+-- ============================================================
+-- M. İzolyasiya səviyyələri və anomaliyalar
+-- ============================================================
+
+-- 42-ci tapşırıq
+SHOW transaction_isolation;
+-- Müşahidə: read committed
+
+BEGIN ISOLATION LEVEL REPEATABLE READ;
+SHOW transaction_isolation;
+-- Müşahidə: repeatable read
+COMMIT;
+
+BEGIN ISOLATION LEVEL READ UNCOMMITTED;
+SHOW transaction_isolation;
+-- Müşahidə: read uncommitted qəbul olunur, amma PostgreSQL onu READ COMMITTED kimi işlədir,
+-- yəni dirty read heç vaxt baş vermir.
+COMMIT;
+/* Default səviyyələr:
+   PostgreSQL     > READ COMMITTED
+   MySQL InnoDB   > REPEATABLE READ
+   SQL Server     > READ COMMITTED */
+
+
+-- 43-cü tapşırıq
+-- Sessiya A, READ COMMITTED
+BEGIN ISOLATION LEVEL READ COMMITTED;
+SELECT balans AS birinci_oxu
+FROM hesab
+WHERE hesab_id = 1;
+-- Müşahidə: 5000.00
+
+-- Sessiya B (ayrı bağlantı)
+-- UPDATE hesab SET balans = 7777.00 WHERE hesab_id = 1;
+-- COMMIT avtomatik olur
+
+-- Sessiya A
+SELECT balans AS ikinci_oxu
+FROM hesab
+WHERE hesab_id = 1;
+-- Müşahidə: 7777.00, yəni eyni tranzaksiya daxilində iki fərqli dəyər oxundu.
+COMMIT;
+
+-- Eyni ssenari REPEATABLE READ ilə
+-- Sessiya A
+BEGIN ISOLATION LEVEL REPEATABLE READ;
+SELECT balans AS birinci_oxu
+FROM hesab
+WHERE hesab_id = 1;
+-- Müşahidə: 7777.00
+
+-- Sessiya B
+-- UPDATE hesab SET balans = 8888.00 WHERE hesab_id = 1;
+
+-- Sessiya A
+SELECT balans AS ikinci_oxu
+FROM hesab
+WHERE hesab_id = 1;
+-- Müşahidə: yenə 7777.00, dəyər sabit qaldı.
+COMMIT;
+
+-- Data ilkin vəziyyətə qaytarılır
+UPDATE hesab
+SET balans = 5000.00
+WHERE hesab_id = 1;
+
+
+-- 44-cü tapşırıq
+-- Sessiya A, READ COMMITTED
+BEGIN ISOLATION LEVEL READ COMMITTED;
+SELECT COUNT(*) AS birinci_say
+FROM satis
+WHERE seher = 'Bakı';
+-- Müşahidə: 11
+
+-- Sessiya B
+-- INSERT INTO satis VALUES (901, DATE '2024-09-01', 'Bakı', 100, 4, 101, 100.00);
+
+-- Sessiya A
+SELECT COUNT(*) AS ikinci_say
+FROM satis
+WHERE seher = 'Bakı';
+-- Müşahidə: 12, yəni phantom sətir göründü.
+COMMIT;
+
+-- Eyni ssenari REPEATABLE READ ilə
+BEGIN ISOLATION LEVEL REPEATABLE READ;
+SELECT COUNT(*) AS birinci_say
+FROM satis
+WHERE seher = 'Bakı';
+-- Sessiya B: INSERT INTO satis VALUES (902, ...);
+SELECT COUNT(*) AS ikinci_say
+FROM satis
+WHERE seher = 'Bakı';
+-- Müşahidə: hər iki say 12-dir. PostgreSQL-də REPEATABLE READ phantom-a da icazə vermir,
+-- yəni standartda tələb olunandan güclüdür.
+COMMIT;
+
+/* SERIALIZABLE səviyyəsində paralel yazma, iki sessiya:
+   -- Sessiya A                                  -- Sessiya B
+   BEGIN ISOLATION LEVEL SERIALIZABLE;           BEGIN ISOLATION LEVEL SERIALIZABLE;
+   SELECT count(*) FROM satis WHERE seher='Bakı';SELECT count(*) FROM satis WHERE seher='Bakı';
+   INSERT INTO satis VALUES (901, ...);          INSERT INTO satis VALUES (902, ...);
+   COMMIT;                                       COMMIT;
+
+   Sessiya A uğurla COMMIT etdi, Sessiya B isə xəta aldı:
+   ERROR:  could not serialize access due to read/write dependencies among transactions
+   DETAIL:  Reason code: Canceled on identification as a pivot, during write.
+   HINT:  The transaction might succeed if retried.
+   Yəni tətbiq bu xətanı tutub əməliyyatı yenidən cəhd etməlidir. */
+
+-- Data ilkin vəziyyətə qaytarılır
+DELETE
+FROM satis
+WHERE satis_id IN (901, 902);
+
+
+-- ============================================================
+-- N. Lock və deadlock
+-- ============================================================
+
+-- 45-ci tapşırıq
+-- Sessiya A
+BEGIN;
+SELECT mehsul_id AS mehsul_id,
+       qaliq     AS qaliq
+FROM anbar
+WHERE mehsul_id = 1 FOR UPDATE;
+-- tranzaksiya açıq saxlanılır, sətir kilidlidir
+
+-- Sessiya B (ayrı bağlantı), üç variant
+-- (1) SELECT ... FROM anbar WHERE mehsul_id = 1 FOR UPDATE;
+--     Müşahidə: əmr gözləməyə keçir, A COMMIT edənə qədər cavab vermir.
+-- (2) SELECT ... FROM anbar WHERE mehsul_id = 1 FOR UPDATE NOWAIT;
+--     Müşahidə: ERROR:  could not obtain lock on row in relation "anbar"
+-- (3) SELECT ... FROM anbar WHERE mehsul_id = 1 FOR UPDATE SKIP LOCKED;
+--     Müşahidə: (0 rows), sətir sadəcə atlanır, xəta yoxdur.
+
+-- Sessiya A
+COMMIT;
+-- Bu, pessimistic locking-dir: sətri əvvəlcədən kilidləyib başqasının dəyişməsinin qarşısını alırıq.
+
+
+-- 46-cı tapşırıq
+/* İki sessiya tərs ardıcıllıqla UPDATE edir:
+
+   -- Sessiya A                                     -- Sessiya B
+   BEGIN;                                           BEGIN;
+   UPDATE hesab SET balans = balans - 10            UPDATE hesab SET balans = balans - 10
+     WHERE hesab_id = 1;                              WHERE hesab_id = 2;
+   UPDATE hesab SET balans = balans + 10            UPDATE hesab SET balans = balans + 10
+     WHERE hesab_id = 2;                              WHERE hesab_id = 1;
+   COMMIT;                                          COMMIT;
+
+   Alınan xəta (Sessiya A qurban seçildi):
+   ERROR:  deadlock detected
+   DETAIL:  Process 74172 waits for ShareLock on transaction 3497; blocked by process 74171.
+   Process 74171 waits for ShareLock on transaction 3498; blocked by process 74172.
+   HINT:  See server log for query details.
+   CONTEXT:  while updating tuple (0,2) in relation "hesab"
+   ROLLBACK
+
+   Sessiya B isə normal COMMIT etdi.
+   Deadlock detector dövrəni aşkarlayıb tranzaksiyalardan birini qurban seçir. */
+
+SHOW deadlock_timeout;
+-- Müşahidə: 1s, yəni detector 1 saniyə gözlədikdən sonra dövrə axtarmağa başlayır.
+
+-- Data ilkin vəziyyətə qaytarılır
+UPDATE hesab
+SET balans = 5000.00
+WHERE hesab_id = 1;
+UPDATE hesab
+SET balans = 1200.00
+WHERE hesab_id = 2;
+
+
+-- 47-ci tapşırıq
+-- (a) Hər iki sessiya resurslara hesab_id üzrə artan sırada müraciət edir
+/* -- Sessiya A                                     -- Sessiya B
+   BEGIN;                                           BEGIN;
+   UPDATE hesab SET balans = balans - 10            UPDATE hesab SET balans = balans - 10
+     WHERE hesab_id = 1;                              WHERE hesab_id = 1;
+   UPDATE hesab SET balans = balans + 10            UPDATE hesab SET balans = balans + 10
+     WHERE hesab_id = 2;                              WHERE hesab_id = 2;
+   COMMIT;                                          COMMIT;
+
+   Müşahidə: deadlock baş vermir. B sadəcə A-nı gözləyir, A COMMIT edəndən sonra işini bitirir.
+   Səbəb: hər iki sessiya kilidləri eyni ardıcıllıqla alır, ona görə dövrə yaranmır. */
+
+-- (b) Optimistic locking, versiya sütunu ilə
+SELECT mehsul_id AS mehsul_id,
+       qaliq     AS qaliq,
+       versiya   AS versiya
+FROM anbar
+WHERE mehsul_id = 1;
+-- Tutaq ki, tətbiq qaliq = 24, versiya = 1 oxudu
+
+UPDATE anbar
+SET qaliq   = qaliq - 1,
+    versiya = versiya + 1
+WHERE mehsul_id = 1
+  AND versiya = 1;
+-- Müşahidə: UPDATE 1, yəni heç kim aradan dəyişməyib.
+
+-- Eyni köhnə versiya ilə ikinci cəhd
+UPDATE anbar
+SET qaliq   = qaliq - 1,
+    versiya = versiya + 1
+WHERE mehsul_id = 1
+  AND versiya = 1;
+-- Müşahidə: UPDATE 0.
+/* 0 sətir dəyişdikdə tətbiq bilir ki, sətri başqası dəyişib. Etməli olduğu: dəyişikliyi
+   zorla yazmaq yox, sətri yenidən oxuyub əməliyyatı təkrarlamaq və ya istifadəçiyə
+   "data yeniləndi" mesajı göstərmək. */
+
+-- Data ilkin vəziyyətə qaytarılır
+UPDATE anbar
+SET qaliq   = 24,
+    versiya = 1
+WHERE mehsul_id = 1;
+
+-- (c) PL/pgSQL-də deadlock xətasını tutub 3 dəfə təkrar cəhd edən retry
+DO
+$$
+    DECLARE
+        v_cehd INT := 0;
+    BEGIN
+        LOOP
+            v_cehd := v_cehd + 1;
+            BEGIN
+                UPDATE hesab SET balans = balans - 10 WHERE hesab_id = 1;
+                UPDATE hesab SET balans = balans + 10 WHERE hesab_id = 2;
+                RAISE NOTICE 'Ugurlu, cehd: %', v_cehd;
+                EXIT;
+            EXCEPTION
+                WHEN deadlock_detected THEN
+                    RAISE NOTICE 'Deadlock, cehd: %', v_cehd;
+                    IF v_cehd >= 3 THEN
+                        RAISE;
+                    END IF;
+                    PERFORM pg_sleep(0.1);
+            END;
+        END LOOP;
+    END
+$$;
+
+-- Data ilkin vəziyyətə qaytarılır
+UPDATE hesab
+SET balans = 5000.00
+WHERE hesab_id = 1;
+UPDATE hesab
+SET balans = 1200.00
+WHERE hesab_id = 2;
+
+
+-- ============================================================
+-- O. Yekun, kompleks tapşırıqlar
+-- ============================================================
+
+-- 48-ci tapşırıq
+-- (1) Rekursiv CTE ilə hər kateqoriya üçün kök tapılır, (2) TEMP cədvələ yazılır
+DROP TABLE IF EXISTS t_kateqoriya_kok;
+CREATE TEMP TABLE t_kateqoriya_kok AS
+WITH RECURSIVE agac AS (SELECT kateqoriya_id,
+                               ad,
+                               kateqoriya_id AS kok_id,
+                               ad            AS kok_ad
+                        FROM kateqoriya
+                        WHERE ust_id IS NULL
+                        UNION ALL
+                        SELECT k.kateqoriya_id,
+                               k.ad,
+                               a.kok_id,
+                               a.kok_ad
+                        FROM kateqoriya k
+                                 JOIN agac a ON k.ust_id = a.kateqoriya_id)
+SELECT kateqoriya_id, ad, kok_id, kok_ad
+FROM agac;
+
+-- (3) indeks və ANALYZE
+CREATE INDEX idx_t_kateqoriya_kok ON t_kateqoriya_kok (kateqoriya_id);
+ANALYZE t_kateqoriya_kok;
+
+-- (4) satışlarla birləşmə, kök kateqoriya və ay kəsiyi
+EXPLAIN ANALYZE
+WITH ayliq AS (SELECT t.kok_ad                           AS kok_ad,
+                      DATE_TRUNC('month', s.tarix)::date AS ay,
+                      SUM(s.mebleg)                      AS dovriyye
+               FROM satis s
+                        JOIN t_kateqoriya_kok t ON t.kateqoriya_id = s.kateqoriya_id
+               GROUP BY 1, 2),
+     umumi AS (SELECT SUM(dovriyye) AS umumi_dovriyye FROM ayliq)
+SELECT kok_ad                                      AS kok_kateqoriya,
+       ay                                          AS ay,
+       dovriyye                                    AS dovriyye,
+       ROUND(dovriyye * 100 / u.umumi_dovriyye, 1) AS faiz_payi
+FROM ayliq
+         CROSS JOIN umumi u
+ORDER BY kok_ad, ay;
+
+-- Nəticənin özü
+WITH ayliq AS (SELECT t.kok_ad                           AS kok_ad,
+                      DATE_TRUNC('month', s.tarix)::date AS ay,
+                      SUM(s.mebleg)                      AS dovriyye
+               FROM satis s
+                        JOIN t_kateqoriya_kok t ON t.kateqoriya_id = s.kateqoriya_id
+               GROUP BY 1, 2),
+     umumi AS (SELECT SUM(dovriyye) AS umumi_dovriyye FROM ayliq)
+SELECT kok_ad                                      AS kok_kateqoriya,
+       ay                                          AS ay,
+       dovriyye                                    AS dovriyye,
+       ROUND(dovriyye * 100 / u.umumi_dovriyye, 1) AS faiz_payi
+FROM ayliq
+         CROSS JOIN umumi u
+ORDER BY kok_ad, ay;
+
+-- Eyni hesabat yalnız CTE ilə
+EXPLAIN ANALYZE
+WITH RECURSIVE
+    agac AS (SELECT kateqoriya_id,
+                    kateqoriya_id AS kok_id,
+                    ad            AS kok_ad
+             FROM kateqoriya
+             WHERE ust_id IS NULL
+             UNION ALL
+             SELECT k.kateqoriya_id,
+                    a.kok_id,
+                    a.kok_ad
+             FROM kateqoriya k
+                      JOIN agac a ON k.ust_id = a.kateqoriya_id),
+    ayliq AS (SELECT a.kok_ad                           AS kok_ad,
+                     DATE_TRUNC('month', s.tarix)::date AS ay,
+                     SUM(s.mebleg)                      AS dovriyye
+              FROM satis s
+                       JOIN agac a ON a.kateqoriya_id = s.kateqoriya_id
+              GROUP BY 1, 2),
+    umumi AS (SELECT SUM(dovriyye) AS umumi_dovriyye FROM ayliq)
+SELECT kok_ad                                      AS kok_kateqoriya,
+       ay                                          AS ay,
+       dovriyye                                    AS dovriyye,
+       ROUND(dovriyye * 100 / u.umumi_dovriyye, 1) AS faiz_payi
+FROM ayliq
+         CROSS JOIN umumi u
+ORDER BY kok_ad, ay;
+/* Müqayisə: kateqoriya cədvəli 10 sətir, satis cədvəli 24 sətirdir, ona görə hər iki variant
+   1 ms ətrafındadır və fərq ölçülə bilən deyil.
+   Seçim: bu ölçüdə CTE variantı daha yaxşıdır, çünki artıq obyekt yaratmır və hesabat bir
+   sorğuda oxunur. TEMP variantı kateqoriya ağacı böyük olduqda və ya eyni ara nəticə bir neçə
+   hesabatda işlədildikdə üstün olar, çünki rekursiya bir dəfə hesablanır və indeksdən istifadə
+   olunur. */
+
+
+-- 49-cu tapşırıq
+-- Daimi hədəf cədvəl
+DROP TABLE IF EXISTS ayliq_yekun;
+CREATE TABLE ayliq_yekun
+(
+    ay         DATE PRIMARY KEY,
+    satis_sayi INT            NOT NULL,
+    dovriyye   NUMERIC(14, 2) NOT NULL,
+    yenilendi  TIMESTAMP      NOT NULL DEFAULT now()
+);
+
+-- İdempotent ETL skripti, tək tranzaksiya
+BEGIN;
+
+CREATE TEMP TABLE t_etl
+(
+    ay         DATE,
+    satis_sayi INT,
+    dovriyye   NUMERIC(14, 2)
+) ON COMMIT DROP;
+
+INSERT INTO t_etl
+SELECT DATE_TRUNC('month', tarix)::date,
+       COUNT(*),
+       SUM(mebleg)
+FROM satis
+GROUP BY DATE_TRUNC('month', tarix);
+
+INSERT INTO ayliq_yekun (ay, satis_sayi, dovriyye)
+SELECT ay, satis_sayi, dovriyye
+FROM t_etl
+ON CONFLICT (ay)
+    DO UPDATE SET satis_sayi = EXCLUDED.satis_sayi,
+                  dovriyye   = EXCLUDED.dovriyye,
+                  yenilendi  = now();
+
+COMMIT;
+
+SELECT COUNT(*) AS birinci_icradan_sonra
+FROM ayliq_yekun;
+
+-- Skript ikinci dəfə icra olunur
+BEGIN;
+
+CREATE TEMP TABLE t_etl
+(
+    ay         DATE,
+    satis_sayi INT,
+    dovriyye   NUMERIC(14, 2)
+) ON COMMIT DROP;
+
+INSERT INTO t_etl
+SELECT DATE_TRUNC('month', tarix)::date,
+       COUNT(*),
+       SUM(mebleg)
+FROM satis
+GROUP BY DATE_TRUNC('month', tarix);
+
+INSERT INTO ayliq_yekun (ay, satis_sayi, dovriyye)
+SELECT ay, satis_sayi, dovriyye
+FROM t_etl
+ON CONFLICT (ay)
+    DO UPDATE SET satis_sayi = EXCLUDED.satis_sayi,
+                  dovriyye   = EXCLUDED.dovriyye,
+                  yenilendi  = now();
+
+COMMIT;
+
+SELECT COUNT(*) AS ikinci_icradan_sonra
+FROM ayliq_yekun;
+
+SELECT ay         AS ay,
+       satis_sayi AS satis_sayi,
+       dovriyye   AS dovriyye
+FROM ayliq_yekun
+ORDER BY ay;
+/* Müşahidə: hər iki icradan sonra sətir sayı 7-dir, dublikat yaranmadı.
+   İdempotentliyi təmin edən üç şey: ay sütunu PRIMARY KEY-dir, ON CONFLICT DO UPDATE mövcud
+   ayı yeniləyir, bütün addımlar tək tranzaksiyadadır və xəta olarsa hamısı geri qayıdır.
+   ON COMMIT DROP temp cədvəli COMMIT-dən sonra öz-özünə silinir, təmizləmə kodu lazım deyil. */
+
+
+-- 50-ci tapşırıq
+CREATE OR REPLACE FUNCTION kocurme(gonderen INT, alan INT, mebleg NUMERIC)
+    RETURNS TEXT
+    LANGUAGE plpgsql
+AS
+$$
+DECLARE
+    v_balans  NUMERIC;
+    v_birinci INT;
+    v_ikinci  INT;
+    v_cehd    INT := 0;
+BEGIN
+    IF mebleg <= 0 THEN
+        RAISE EXCEPTION 'Mebleg musbet olmalidir, verilen: %', mebleg;
+    END IF;
+
+    -- Deadlock-un qarşısını almaq üçün hesablar həmişə artan sıra ilə kilidlənir
+    v_birinci := LEAST(gonderen, alan);
+    v_ikinci := GREATEST(gonderen, alan);
+
+    LOOP
+        v_cehd := v_cehd + 1;
+        BEGIN
+            PERFORM hesab_id FROM hesab WHERE hesab_id = v_birinci FOR UPDATE;
+            PERFORM hesab_id FROM hesab WHERE hesab_id = v_ikinci FOR UPDATE;
+
+            SELECT balans INTO v_balans FROM hesab WHERE hesab_id = gonderen;
+
+            IF v_balans IS NULL THEN
+                RAISE EXCEPTION 'Hesab tapilmadi: %', gonderen;
+            END IF;
+
+            IF v_balans < mebleg THEN
+                RAISE EXCEPTION 'Vesait catmir. Hesab %, balans %, teleb olunan %',
+                    gonderen, v_balans, mebleg;
+            END IF;
+
+            UPDATE hesab SET balans = balans - mebleg WHERE hesab_id = gonderen;
+            UPDATE hesab SET balans = balans + mebleg WHERE hesab_id = alan;
+
+            INSERT INTO kocurme_log (hesab_id, emeliyyat, mebleg, qeyd)
+            VALUES (gonderen, 'cixaris', mebleg, 'kocurme, alan: ' || alan);
+            INSERT INTO kocurme_log (hesab_id, emeliyyat, mebleg, qeyd)
+            VALUES (alan, 'medaxil', mebleg, 'kocurme, gonderen: ' || gonderen);
+
+            RETURN 'Ugurlu kocurme: ' || mebleg || ' AZN, ' || gonderen || ' > ' || alan;
+
+        EXCEPTION
+            WHEN deadlock_detected THEN
+                IF v_cehd >= 3 THEN
+                    RAISE;
+                END IF;
+                PERFORM pg_sleep(0.1);
+        END;
+    END LOOP;
+END
+$$;
+
+-- Uğurlu çağırış
+SELECT kocurme(1, 2, 500.00) AS netice;
+
+SELECT hesab_id AS hesab_id,
+       balans   AS balans
+FROM hesab
+WHERE hesab_id IN (1, 2)
+ORDER BY hesab_id;
+-- Müşahidə: 1 = 4500.00, 2 = 1700.00, kocurme_log-a iki sətir yazıldı.
+
+-- Uğursuz çağırış, vəsait çatmır
+SELECT kocurme(4, 1, 100.00) AS netice;
+/* ERROR:  Vesait catmir. Hesab 4, balans 0.00, teleb olunan 100.00
+   Funksiya öz-özlüyündə bir tranzaksiyadır, RAISE EXCEPTION bütün dəyişiklikləri geri alır,
+   ona görə nə balanslar, nə də log dəyişir. */
+
+SELECT hesab_id AS hesab_id,
+       balans   AS balans
+FROM hesab
+ORDER BY hesab_id;
+
+-- Data ilkin vəziyyətə qaytarılır
+UPDATE hesab
+SET balans = 5000.00
+WHERE hesab_id = 1;
+UPDATE hesab
+SET balans = 1200.00
+WHERE hesab_id = 2;
+DELETE
+FROM kocurme_log;
+
+
+-- 51-ci tapşırıq
+/* Skriptdəki altı səhv:
+   1) CREATE INDEX INSERT-dən əvvəl yazılıb. Düzgün ardıcıllıq: doldur, sonra indeks qur.
+   2) Doldurduqdan sonra ANALYZE yoxdur, ona görə temp cədvəlin statistikası boş qalır və
+      optimizator sətir sayını səhv qiymətləndirir.
+   3) agir CTE-si əsas sorğuda üç dəfə istinad olunub, yəni aqreqasiya üç dəfə icra olunur.
+      MATERIALIZED yazılmalı, ya da nəticə temp cədvələ yığılmalıdır.
+   4) Rekursiv sorğuda dövrə qoruyucusu yoxdur. qraf-da 2 > 3 > 4 > 2 dövrəsi var, sorğu
+      sonsuza gedir. Yol massivi və səviyyə limiti lazımdır.
+   5) UPDATE hesab SET balans = balans * 1.05; WHERE yoxdur və açıq tranzaksiya da yoxdur,
+      yəni bütün sətirlər dəyişir və autocommit səbəbindən geri qaytarmaq mümkün deyil.
+   6) Tranzaksiyanın içində xarici API gözləntisi var. 30 saniyə boyunca sətirlər kilidli qalır,
+      VACUUM köhnə versiyaları təmizləyə bilmir, digər sessiyalar gözləyir. */
+
+-- Düzgün variant:
+-- (1) və (2): əvvəl doldur, sonra indeks, sonra ANALYZE
+DROP TABLE IF EXISTS t_boyuk;
+CREATE TEMP TABLE t_boyuk
+(
+    musteri_id INT,
+    cem        NUMERIC
+);
+
+INSERT INTO t_boyuk
+SELECT musteri_id, SUM(mebleg)
+FROM satis
+GROUP BY musteri_id;
+
+CREATE INDEX ix_t ON t_boyuk (musteri_id);
+ANALYZE t_boyuk;
+
+-- (3): CTE üç dəfə istinad olunur, ona görə MATERIALIZED yazılır
+WITH agir AS MATERIALIZED (SELECT s.satis_id,
+                                  s.mebleg,
+                                  t.cem
+                           FROM satis s
+                                    JOIN t_boyuk t USING (musteri_id))
+SELECT (SELECT COUNT(*) FROM agir)    AS say,
+       (SELECT SUM(mebleg) FROM agir) AS cem,
+       (SELECT MAX(cem) FROM agir)    AS maks;
+
+-- (4): rekursiyaya yol massivi və səviyyə limiti əlavə olunur
+WITH RECURSIVE ag AS (SELECT ust,
+                             alt,
+                             1                AS seviyye,
+                             ARRAY [ust, alt] AS yol
+                      FROM qraf
+                      WHERE ust = 1
+                      UNION ALL
+                      SELECT q.ust,
+                             q.alt,
+                             a.seviyye + 1,
+                             a.yol || q.alt
+                      FROM qraf q
+                               JOIN ag a ON q.ust = a.alt
+                      WHERE NOT (q.alt = ANY (a.yol))
+                        AND a.seviyye < 10)
+SELECT ust     AS ust,
+       alt     AS alt,
+       seviyye AS seviyye
+FROM ag
+ORDER BY seviyye, ust, alt;
+
+-- (5): açıq tranzaksiya, WHERE şərti və yoxlama
+BEGIN;
+SELECT COUNT(*) AS deyisecek_setir
+FROM hesab
+WHERE valyuta = 'AZN';
+UPDATE hesab
+SET balans = balans * 1.05
+WHERE valyuta = 'AZN';
+SELECT hesab_id AS hesab_id, balans AS balans
+FROM hesab
+ORDER BY hesab_id;
+ROLLBACK;
+
+-- (6): xarici çağırış tranzaksiyadan kənara çıxarılır, tranzaksiya qısa saxlanılır
+-- Tətbiq əvvəlcə API cavabını alır, yalnız sonra qısa tranzaksiya açır:
+BEGIN;
+UPDATE anbar
+SET qaliq = qaliq - 1
+WHERE mehsul_id = 1;
+UPDATE anbar
+SET qaliq = qaliq - 1
+WHERE mehsul_id = 2;
+COMMIT;
+
+-- Data ilkin vəziyyətə qaytarılır
+UPDATE anbar
+SET qaliq = 24
+WHERE mehsul_id = 1;
+UPDATE anbar
+SET qaliq = 40
+WHERE mehsul_id = 2;
