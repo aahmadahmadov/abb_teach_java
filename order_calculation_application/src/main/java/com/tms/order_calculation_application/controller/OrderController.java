@@ -5,6 +5,7 @@ import com.tms.order_calculation_application.dto.response.OrderResponse;
 import com.tms.order_calculation_application.dto.response.PromoCodeResponse;
 import com.tms.order_calculation_application.service.OrderCalculationService;
 import com.tms.order_calculation_application.service.promo.PromoService;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -22,11 +23,13 @@ public class OrderController {
     }
 
     @PostMapping("/calculate")
+    @ResponseStatus(HttpStatus.CREATED)
     public OrderResponse calculate(@RequestBody OrderRequest request) {
         return orderCalculationService.calculate(request);
     }
 
     @GetMapping("/promo-codes")
+    @ResponseStatus(HttpStatus.OK)
     public List<PromoCodeResponse> getPromoCodes() {
         return promoService.getPromoCodes();
     }
