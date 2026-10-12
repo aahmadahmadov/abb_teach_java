@@ -1,5 +1,6 @@
 package com.spring_boot.spring_practice_07_10.controller;
 
+import com.spring_boot.spring_practice_07_10.component.RequestContext;
 import com.spring_boot.spring_practice_07_10.dto.request.UserInfoRequest;
 import com.spring_boot.spring_practice_07_10.dto.response.UserInfoResponse;
 import com.spring_boot.spring_practice_07_10.service.UserInfoService;
@@ -12,10 +13,12 @@ import java.util.List;
 public class UserInfoController {
 
     private final UserInfoService userInfoService;
+    private final RequestContext requestContext;
 
-    public UserInfoController(UserInfoService userInfoService) {
+    public UserInfoController(UserInfoService userInfoService, RequestContext requestContext) {
         this.userInfoService = userInfoService;
-        System.out.println("UserInfoController created. Hash: : " + this.hashCode());
+        this.requestContext = requestContext;
+        System.out.println("UserInfoController yaradildi. Hash: " + this.hashCode());
     }
 
     @PostMapping("/create")
@@ -25,7 +28,17 @@ public class UserInfoController {
 
     @GetMapping("/{id}")
     public UserInfoResponse getById(@PathVariable Long id) {
-        return userInfoService.getUserById(id);
+
+        System.out.println("[Controller] requestId=" + requestContext.getRequestId());
+        System.out.println("RequestContext class: " + requestContext.getClass());
+
+        UserInfoResponse response = userInfoService.getUserById(id);
+
+        long duration = System.currentTimeMillis() - requestContext.getStartTime();
+
+        System.out.println("Sorgu " + duration + " ms oldu");
+
+        return response;
     }
 
     @GetMapping("/all")
@@ -33,5 +46,9 @@ public class UserInfoController {
         return userInfoService.getAllUsers();
     }
 
+    @GetMapping("/recent")
+    public List<UserInfoResponse> getRecent() {
+        return userInfoService.getRecentUsers();
+    }
 
 }
