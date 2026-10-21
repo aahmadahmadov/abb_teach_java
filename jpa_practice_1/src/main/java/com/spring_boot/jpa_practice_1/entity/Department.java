@@ -6,6 +6,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Entity
@@ -32,13 +33,15 @@ public class Department {
     @Column(name = "phone", length = 20)
     private String phone;
 
+    // all: department silinende isciler de silinecek
+    // orphanRemoval: siyahidan cixan user db-deb silinecek
     @OneToMany(
             mappedBy = "department",
             fetch = FetchType.LAZY,
             cascade = CascadeType.ALL,
             orphanRemoval = true
     )
-    private List<Employee> employees;
+    private List<Employee> employees = new ArrayList<>();
 
     public void addEmployee(Employee employee) {
 

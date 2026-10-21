@@ -9,7 +9,7 @@ import lombok.Setter;
 @Entity
 @Table(name = "author_book", uniqueConstraints = {
         @UniqueConstraint(
-                name = "unk_author_book",
+                name = "uk_author_book",
                 columnNames = {"author_id", "book_id"}
         )
 })
@@ -17,6 +17,8 @@ import lombok.Setter;
 @NoArgsConstructor
 @Getter
 @Setter
+// pivot vedvel ucun entity yaratmaqda ustunluk ola biler elave datalar vere bilerik burda sonradan, information tipli column elave edile biler.
+// castismazliq ise elave kod yazmali oluruq, kodda +1 class yaradiriq, kitaba getmek ucun pivot ustunden gedirik bunlar ola biler.
 public class AuthorBook {
 
     @Id
@@ -24,6 +26,7 @@ public class AuthorBook {
     @Column(name = "id", nullable = false)
     private Long id;
 
+    // cascade vermirik cunku AuthorBook silinende muellif recordu silinmemelidi
     @ManyToOne(
             fetch = FetchType.LAZY, optional = false
     )
@@ -31,16 +34,17 @@ public class AuthorBook {
             name = "author_id",
             nullable = false,
             foreignKey = @ForeignKey(
-                    name = "fk_author_book_author_id"
+                    name = "fk_ab_author"
             )
     )
     private Author author;
 
+    // cascade vermiyirk cunku AuthorBook silinende kitab silinmemelidi
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(
             name = "book_id",
             nullable = false,
-            foreignKey = @ForeignKey(name = "fk_author_book_book_id")
+            foreignKey = @ForeignKey(name = "fk_ab_book")
     )
     private Book book;
 

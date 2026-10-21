@@ -7,9 +7,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 @Entity
 @Table(name = "authors", uniqueConstraints = { })
@@ -33,6 +31,8 @@ public class Author {
     @Column(name = "country", length = 50)
     private String country;
 
+    // all + orphanRemoval: author silinende sadece author_book recordlari silinecek, birlesdiyir yerdeki datalar qalir
+    // sadece relation silinsin, qarsi terefde datalar qalsin kimi bir yanasma lazimdisa islenir
     @OneToMany(
             mappedBy = "author",
             fetch = FetchType.LAZY,

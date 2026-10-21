@@ -33,6 +33,7 @@ public class Course {
     @Column(name = "teacher", nullable = false, length = 50)
     private String teacher;
 
+    // cascade yoxdu cunku kurs silinende telebeler silinmemelidi
     @ManyToMany(
             mappedBy = "courses",
             fetch = FetchType.LAZY

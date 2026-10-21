@@ -36,8 +36,10 @@ public class User {
     @Column(name = "gender_id", nullable = false)
     private GenderTypeEnum gender;
 
+    // user silinende onun passportda silinsin deye cascade all
     @OneToOne(
             mappedBy = "user",
+            fetch = FetchType.LAZY,
             cascade = CascadeType.ALL,
             orphanRemoval = true
     )

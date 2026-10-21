@@ -11,8 +11,7 @@ import java.math.BigDecimal;
 
 @Entity
 @Table(name = "employees", uniqueConstraints = { })
-@Check(name = "chk_employee_salary", constraints = "salary >= 0")
-@Check(name = "chk_employee_age", constraints = "age >= 18 AND age <= 100")
+@Check(name = "chk_employee_salary", constraints = "salary > 0")
 @Getter
 @Setter
 @AllArgsConstructor
@@ -20,6 +19,10 @@ import java.math.BigDecimal;
 public class Employee {
 
     @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "id", nullable = false)
+    private Long id;
+
     @Column(name = "name", length = 50, nullable = false)
     private String name;
 
@@ -29,6 +32,7 @@ public class Employee {
     @Column(name = "salary", nullable = false, scale = 2, precision = 10)
     private BigDecimal salary;
 
+    // cascade yoxdu cunku isci silinende departent silinmemelidi
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(
             name = "department_id",

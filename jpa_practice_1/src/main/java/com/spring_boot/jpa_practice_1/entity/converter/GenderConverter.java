@@ -4,8 +4,6 @@ import com.spring_boot.jpa_practice_1.enums.GenderTypeEnum;
 import jakarta.persistence.AttributeConverter;
 import jakarta.persistence.Converter;
 
-import java.util.stream.Stream;
-
 @Converter
 public class GenderConverter implements AttributeConverter<GenderTypeEnum, Integer> {
 
@@ -19,7 +17,7 @@ public class GenderConverter implements AttributeConverter<GenderTypeEnum, Integ
      */
     @Override
     public Integer convertToDatabaseColumn(GenderTypeEnum attribute) {
-        return attribute != null ? attribute.getCode() : null;
+        return attribute != null ? attribute.getId() : null;
     }
 
     /**
@@ -36,9 +34,10 @@ public class GenderConverter implements AttributeConverter<GenderTypeEnum, Integ
      */
     @Override
     public GenderTypeEnum convertToEntityAttribute(Integer dbData) {
-        return Stream.of(GenderTypeEnum.values())
-                .filter(gender -> gender.getCode().equals(dbData))
-                .findFirst()
-                .orElse(null);
+        if (dbData == null) {
+            return null;
+        }
+
+        return GenderTypeEnum.fromId(dbData);
     }
 }

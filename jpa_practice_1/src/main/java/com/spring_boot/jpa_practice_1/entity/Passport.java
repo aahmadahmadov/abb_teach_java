@@ -32,6 +32,7 @@ public class Passport {
 
     // Hər userin 1 passport olur ona gore user_id unique-dir,
     // eger soft delet column olsaydi amma, bu zaman deleted_at ve user_id ikisi biryerde unique olardi
+    // cascade vermirik cunku passport silinende user silinmemelidi
     @OneToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(
             name = "user_id",

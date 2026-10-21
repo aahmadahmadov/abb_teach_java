@@ -7,7 +7,6 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 
 @Entity
@@ -32,24 +31,26 @@ public class Student {
     @Column(name = "age", nullable = false)
     private Integer age;
 
+    // cascade: persist ve merge edirik cunku sadece course ve student arasindaki elaqeni silmek isteyirik.
+    // student silinende kurs silinmemelidi sadec student course record silinmelidi
     @ManyToMany(
             fetch = FetchType.LAZY,
             cascade = {CascadeType.MERGE, CascadeType.PERSIST}
     )
     @JoinTable(
-            name = "student_courses",
+            name = "student_course",
             joinColumns = @JoinColumn(
                     name = "student_id",
                     referencedColumnName = "id",
-                    foreignKey = @ForeignKey(name = "fk_student_courses_student_id")
+                    foreignKey = @ForeignKey(name = "fk_sc_student")
             ),
             inverseJoinColumns = @JoinColumn(
                     name = "course_id",
                     referencedColumnName = "id",
-                    foreignKey = @ForeignKey(name = "fk_student_courses_course_id")
+                    foreignKey = @ForeignKey(name = "fk_sc_course")
             ),
             uniqueConstraints = @UniqueConstraint(
-                    name = "uk_student_courses",
+                    name = "uk_student_course",
                     columnNames = {"student_id", "course_id"}
             )
     )

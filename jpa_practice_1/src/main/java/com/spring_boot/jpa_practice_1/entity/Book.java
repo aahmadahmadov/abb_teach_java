@@ -9,9 +9,7 @@ import org.hibernate.annotations.Check;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 @Entity
 @Table(name = "books", uniqueConstraints = { })
@@ -36,6 +34,7 @@ public class Book {
     @Column(name = "page_count", nullable = false)
     private Integer pageCount;
 
+    // all + orphanremoval: book silinende sadece author_book recordu silinecek
     @OneToMany(
             mappedBy = "book",
             fetch = FetchType.LAZY,
