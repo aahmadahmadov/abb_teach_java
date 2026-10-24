@@ -3,19 +3,14 @@ package com.spring_boot.jpa_practice_1.entity;
 import com.spring_boot.jpa_practice_1.entity.converter.GenderConverter;
 import com.spring_boot.jpa_practice_1.enums.GenderTypeEnum;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 
 @Entity
 @Table(name = "users", uniqueConstraints = {
         @UniqueConstraint(name = "uk_email", columnNames = {"email"})
 })
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Getter
-@Setter
-@AllArgsConstructor
-@NoArgsConstructor
 public class User {
 
     @Id

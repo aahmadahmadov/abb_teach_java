@@ -1,19 +1,14 @@
 package com.spring_boot.jpa_practice_1.entity;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 
 import java.time.LocalDate;
 
 @Entity
 @Table(name = "passports", uniqueConstraints = { })
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Getter
-@Setter
-@AllArgsConstructor
-@NoArgsConstructor
 public class Passport {
 
     @Id
@@ -40,6 +35,7 @@ public class Passport {
             unique = true,
             foreignKey = @ForeignKey(name = "fk_passport_user")
     )
+    @Setter(AccessLevel.PACKAGE)
     private User user;
 
 }

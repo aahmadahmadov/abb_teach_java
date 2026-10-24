@@ -1,10 +1,7 @@
 package com.spring_boot.jpa_practice_1.entity;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 
 @Entity
 @Table(name = "author_book", uniqueConstraints = {
@@ -13,10 +10,8 @@ import lombok.Setter;
                 columnNames = {"author_id", "book_id"}
         )
 })
-@AllArgsConstructor
-@NoArgsConstructor
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Getter
-@Setter
 // pivot vedvel ucun entity yaratmaqda ustunluk ola biler elave datalar vere bilerik burda sonradan, information tipli column elave edile biler.
 // castismazliq ise elave kod yazmali oluruq, kodda +1 class yaradiriq, kitaba getmek ucun pivot ustunden gedirik bunlar ola biler.
 public class AuthorBook {
@@ -37,6 +32,7 @@ public class AuthorBook {
                     name = "fk_ab_author"
             )
     )
+    @Setter(AccessLevel.PACKAGE)
     private Author author;
 
     // cascade vermiyirk cunku AuthorBook silinende kitab silinmemelidi
@@ -46,6 +42,7 @@ public class AuthorBook {
             nullable = false,
             foreignKey = @ForeignKey(name = "fk_ab_book")
     )
+    @Setter(AccessLevel.PACKAGE)
     private Book book;
 
 }
