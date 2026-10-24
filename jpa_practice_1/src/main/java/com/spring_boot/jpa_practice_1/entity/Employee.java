@@ -9,8 +9,10 @@ import java.math.BigDecimal;
 @Entity
 @Table(name = "employees", uniqueConstraints = { })
 @Check(name = "chk_employee_salary", constraints = "salary > 0")
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@AllArgsConstructor
+@NoArgsConstructor
 @Getter
+@Setter
 public class Employee {
 
     @Id
@@ -29,11 +31,6 @@ public class Employee {
 
     // cascade yoxdu cunku isci silinende departent silinmemelidi
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(
-            name = "department_id",
-            nullable = false,
-            foreignKey = @ForeignKey(name = "fk_employee_department")
-    )
-    @Setter(AccessLevel.PACKAGE)
+    @JoinColumn(name = "department_id", nullable = false, foreignKey = @ForeignKey(name = "fk_employee_department"))
     private Department department;
 }

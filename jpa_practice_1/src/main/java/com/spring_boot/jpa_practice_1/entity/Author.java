@@ -8,8 +8,10 @@ import java.util.List;
 
 @Entity
 @Table(name = "authors", uniqueConstraints = { })
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@AllArgsConstructor
+@NoArgsConstructor
 @Getter
+@Setter
 public class Author {
 
     @Id
@@ -28,12 +30,7 @@ public class Author {
 
     // all + orphanRemoval: author silinende sadece author_book recordlari silinecek, birlesdiyir yerdeki datalar qalir
     // sadece relation silinsin, qarsi terefde datalar qalsin kimi bir yanasma lazimdisa islenir
-    @OneToMany(
-            mappedBy = "author",
-            fetch = FetchType.LAZY,
-            cascade = CascadeType.ALL,
-            orphanRemoval = true
-    )
+    @OneToMany(mappedBy = "author", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
     private List<AuthorBook> authorBooks = new ArrayList<>();
 
     public void addAuthorBook(AuthorBook authorBook) {

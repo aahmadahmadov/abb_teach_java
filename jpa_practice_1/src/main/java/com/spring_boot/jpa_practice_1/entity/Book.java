@@ -11,8 +11,10 @@ import java.util.List;
 @Entity
 @Table(name = "books", uniqueConstraints = { })
 @Check(name = "chk_book_price", constraints = "price >= 0")
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@AllArgsConstructor
+@NoArgsConstructor
 @Getter
+@Setter
 public class Book {
 
     @Id
@@ -30,12 +32,7 @@ public class Book {
     private Integer pageCount;
 
     // all + orphanremoval: book silinende sadece author_book recordu silinecek
-    @OneToMany(
-            mappedBy = "book",
-            fetch = FetchType.LAZY,
-            cascade = CascadeType.ALL,
-            orphanRemoval = true
-    )
+    @OneToMany(mappedBy = "book", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
     private List<AuthorBook> authorBooks = new ArrayList<>();
 
     public void addAuthorBook(AuthorBook authorBook) {

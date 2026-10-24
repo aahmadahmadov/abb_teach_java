@@ -10,8 +10,10 @@ import java.util.Set;
 @Table(name = "courses", uniqueConstraints = {
         @UniqueConstraint(name = "uk_title", columnNames = {"title"})
 })
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@AllArgsConstructor
+@NoArgsConstructor
 @Getter
+@Setter
 public class Course {
 
     @Id
@@ -29,10 +31,7 @@ public class Course {
     private String teacher;
 
     // cascade yoxdu cunku kurs silinende telebeler silinmemelidi
-    @ManyToMany(
-            mappedBy = "courses",
-            fetch = FetchType.LAZY
-    )
+    @ManyToMany(mappedBy = "courses", fetch = FetchType.LAZY)
     private Set<Student> students = new HashSet<>();
 
 }

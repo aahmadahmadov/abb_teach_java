@@ -6,6 +6,7 @@ import lombok.Getter;
 @AllArgsConstructor
 @Getter
 public enum GenderTypeEnum {
+
     MALE(1, "Kişi"),
     FEMALE(2, "Qadın");
 

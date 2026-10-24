@@ -10,8 +10,10 @@ import java.util.List;
 @Table(name = "departments", uniqueConstraints = {
         @UniqueConstraint(name = "uk_department_name", columnNames = {"name"})
 })
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@AllArgsConstructor
+@NoArgsConstructor
 @Getter
+@Setter
 public class Department {
 
     @Id
@@ -30,12 +32,7 @@ public class Department {
 
     // all: department silinende isciler de silinecek
     // orphanRemoval: siyahidan cixan user db-deb silinecek
-    @OneToMany(
-            mappedBy = "department",
-            fetch = FetchType.LAZY,
-            cascade = CascadeType.ALL,
-            orphanRemoval = true
-    )
+    @OneToMany(mappedBy = "department", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Employee> employees = new ArrayList<>();
 
     public void addEmployee(Employee employee) {

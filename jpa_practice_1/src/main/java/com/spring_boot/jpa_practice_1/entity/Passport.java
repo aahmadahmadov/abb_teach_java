@@ -7,8 +7,10 @@ import java.time.LocalDate;
 
 @Entity
 @Table(name = "passports", uniqueConstraints = { })
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@AllArgsConstructor
+@NoArgsConstructor
 @Getter
+@Setter
 public class Passport {
 
     @Id
@@ -29,12 +31,7 @@ public class Passport {
     // eger soft delet column olsaydi amma, bu zaman deleted_at ve user_id ikisi biryerde unique olardi
     // cascade vermirik cunku passport silinende user silinmemelidi
     @OneToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(
-            name = "user_id",
-            nullable = false,
-            unique = true,
-            foreignKey = @ForeignKey(name = "fk_passport_user")
-    )
+    @JoinColumn(name = "user_id", nullable = false, unique = true, foreignKey = @ForeignKey(name = "fk_passport_user"))
     @Setter(AccessLevel.PACKAGE)
     private User user;
 

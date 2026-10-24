@@ -8,8 +8,10 @@ import java.util.Set;
 
 @Entity
 @Table(name = "students", uniqueConstraints = { })
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@AllArgsConstructor
+@NoArgsConstructor
 @Getter
+@Setter
 public class Student {
 
     @Id
@@ -28,10 +30,7 @@ public class Student {
 
     // cascade: persist ve merge edirik cunku sadece course ve student arasindaki elaqeni silmek isteyirik.
     // student silinende kurs silinmemelidi sadec student course record silinmelidi
-    @ManyToMany(
-            fetch = FetchType.LAZY,
-            cascade = {CascadeType.MERGE, CascadeType.PERSIST}
-    )
+    @ManyToMany(fetch = FetchType.LAZY, cascade = {CascadeType.MERGE, CascadeType.PERSIST})
     @JoinTable(
             name = "student_course",
             joinColumns = @JoinColumn(

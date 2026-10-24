@@ -9,8 +9,10 @@ import lombok.*;
 @Table(name = "users", uniqueConstraints = {
         @UniqueConstraint(name = "uk_email", columnNames = {"email"})
 })
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@AllArgsConstructor
+@NoArgsConstructor
 @Getter
+@Setter
 public class User {
 
     @Id
@@ -32,27 +34,13 @@ public class User {
     private GenderTypeEnum gender;
 
     // user silinende onun passportda silinsin deye cascade all
-    @OneToOne(
-            mappedBy = "user",
-            fetch = FetchType.LAZY,
-            cascade = CascadeType.ALL,
-            orphanRemoval = true
-    )
+    @OneToOne(mappedBy = "user", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
     private Passport passport;
 
     public void setPassport(Passport passport) {
-        if (this.passport == passport) {
-            return;
-        }
-
-        Passport oldPassport = this.passport;
         this.passport = passport;
 
-        if (oldPassport != null && oldPassport.getUser() == this) {
-            oldPassport.setUser(null);
-        }
-
-        if (passport != null && passport.getUser() != this) {
+        if (passport != null) {
             passport.setUser(this);
         }
     }
