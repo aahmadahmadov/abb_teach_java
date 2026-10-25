@@ -1,12 +1,16 @@
 package com.spring_boot.school_department.service;
 
+import com.spring_boot.school_department.dto.request.CreatePassportRequest;
 import com.spring_boot.school_department.dto.request.CreateUserRequest;
 import com.spring_boot.school_department.dto.request.UpdateUserRequest;
 import com.spring_boot.school_department.dto.response.PassportResponse;
 import com.spring_boot.school_department.dto.response.UserResponse;
+import com.spring_boot.school_department.entity.Passport;
 import com.spring_boot.school_department.entity.User;
 import com.spring_boot.school_department.enums.GenderEnum;
+import com.spring_boot.school_department.mapper.PassportMapper;
 import com.spring_boot.school_department.mapper.UserMapper;
+import com.spring_boot.school_department.repository.PassportRepository;
 import com.spring_boot.school_department.repository.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -20,7 +24,10 @@ import java.util.List;
 @Transactional(readOnly = true)
 public class UserService {
 
+    private final PassportRepository passportRepository;
     private final UserRepository userRepository;
+
+    private final PassportMapper passportMapper;
     private final UserMapper userMapper;
 
     @Transactional
@@ -73,10 +80,40 @@ public class UserService {
         userRepository.delete(findUser(id));
     }
 
-    public PassportResponse addPassport(Long id, CreateUserRequest request) {
+    @Transactional
+    public PassportResponse addPassport(Long id, CreatePassportRequest request) {
         User user = findUser(id);
 
-        if (userRepository.exists)
+        if (user.getPassport() != null) {
+            throw new IllegalStateException("User already has a passport: " + id);
+        }
+
+        if (passportRepository.existsBySerialNumber(request.serialNumber())) {
+            throw new IllegalStateException("Passport serial number already exists: " + request.serialNumber());
+        }
+
+        Passport passport = passportMapper.toEntity(request);
+        user.setPassport(passport);
+
+        return passportMapper.toResponse(passportRepository.save(passport));
+    }
+
+    public PassportResponse getPassportByUserId(Long userId) {
+        Passport passport = passportRepository.findByUserId(userId)
+                .orElseThrow(() -> new EntityNotFoundException("Passport not found for user: " + userId));
+
+        return passportMapper.toResponse(passport);
+    }
+
+    @Transactional
+    public void deletePassportByUserId(Long userId) {
+        User user = findUser(userId);
+
+        if (user.getPassport() == null) {
+            throw new EntityNotFoundException("Passport not found for user: " + userId);
+        }
+
+        user.setPassport(null);
     }
 
     private User findUser(Long id) {

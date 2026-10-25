@@ -66,12 +66,12 @@ public class UserController {
 
     @GetMapping("/{id}/passport")
     public PassportResponse getPassport(@PathVariable Long id) {
-        return userService.getPassport(id);
+        return userService.getPassportByUserId(id);
     }
 
     @DeleteMapping("/{id}/passport")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deletePassport(@PathVariable Long id) {
-        userService.deletePassport(id);
+        userService.deletePassportByUserId(id);
     }
 }
