@@ -5,6 +5,7 @@ import com.spring_boot.school_department.dto.response.PassportResponse;
 import com.spring_boot.school_department.entity.Passport;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
+import org.mapstruct.MappingTarget;
 
 import java.util.List;
 
@@ -18,4 +19,8 @@ public interface PassportMapper {
     PassportResponse toResponse(Passport passport);
 
     List<PassportResponse> toResponseList(List<Passport> passports);
+
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "user", ignore = true)
+    void updateEntity(CreatePassportRequest request, @MappingTarget Passport passport);
 }

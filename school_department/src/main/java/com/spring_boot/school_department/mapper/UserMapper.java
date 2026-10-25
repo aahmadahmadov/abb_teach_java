@@ -15,6 +15,7 @@ import java.util.List;
 public interface UserMapper {
 
     @Mapping(target = "id", ignore = true)
+    @Mapping(target = "passport", ignore = true)
     User toEntity(CreateUserRequest request);
 
     UserResponse toResponse(User user);
@@ -24,8 +25,4 @@ public interface UserMapper {
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "passport", ignore = true)
     void updateEntity(UpdateUserRequest request, @MappingTarget User user);
-
-    default GenderEnum toGender(Integer code) {
-        return GenderEnum.findByDbCode(code);
-    }
 }

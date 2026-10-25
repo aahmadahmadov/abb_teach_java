@@ -23,6 +23,6 @@ public class BaseEntity {
     private LocalDateTime updatedAt;
 
     @Version
-    @Column(name = "version", nullable = false)
+    @Column(name = "version_id", nullable = false)
     private Long version;
 }
