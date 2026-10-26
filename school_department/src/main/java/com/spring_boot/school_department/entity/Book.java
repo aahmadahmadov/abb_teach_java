@@ -34,4 +34,10 @@ public class Book extends BaseEntity {
 
     @OneToMany(mappedBy = "book", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
     private List<AuthorBook> authorBooks = new ArrayList<>();
+
+    public void addAuthor(Author author) {
+        AuthorBook authorBook = new AuthorBook(author, this);
+        authorBooks.add(authorBook);
+        author.getAuthorBooks().add(authorBook);
+    }
 }

@@ -24,8 +24,6 @@ Base URL: `http://localhost:8080/test-demo`
 - Swagger UI: http://localhost:8080/test-demo/swagger-ui/index.html
 - OpenAPI JSON: http://localhost:8080/test-demo/v3/api-docs
 
-![Swagger UI](docs/screenshots/swagger-ui.png)
-
 ## Modul 1: User ↔ Passport (OneToOne)
 
 | Metod | URL | Təsvir |
@@ -53,20 +51,6 @@ POST /api/users
 }
 ```
 
-### Yoxlama
-
-User yaradıldı, passport əlavə olundu, `GET /api/users/{id}` passportu qaytarır:
-
-![User passport ilə](docs/screenshots/user-with-passport.png)
-
-Bazada `users.gender_id` sütununda 1/2 saxlanılır:
-
-![gender_id](docs/screenshots/users-gender-id.png)
-
-Passport silindikdən sonra `passports` cədvəlində sətir yoxdur (orphanRemoval):
-
-![Passport silindi](docs/screenshots/passport-deleted.png)
-
 ## Modul 2: Department → Employee (OneToMany)
 
 | Metod | URL | Təsvir |
@@ -85,20 +69,49 @@ Passport silindikdən sonra `passports` cədvəlində sətir yoxdur (orphanRemov
 | PUT | `/api/employees/{id}` | Yenilə (departament dəyişə bilər) |
 | DELETE | `/api/employees/{id}` | İşçini sil |
 
-### Yoxlama
-
-İşçisi olan departamenti silmək xəta verir:
-
-![Department silinmir](docs/screenshots/department-delete-error.png)
-
-`GET /api/departments/{id}` tək SELECT ilə işləyir (JOIN FETCH, N+1 yoxdur):
-
-![JOIN FETCH](docs/screenshots/department-join-fetch-sql.png)
-
 ## Modul 3: Student ↔ Course (ManyToMany, @JoinTable)
 
-Hazırlanır.
+| Metod | URL | Təsvir |
+| --- | --- | --- |
+| POST | `/api/students` | Tələbə yarat |
+| GET | `/api/students/{id}` | Kurslar ilə birlikdə (left join fetch) |
+| GET | `/api/students` | Hamısı |
+| GET | `/api/students/without-courses` | Heç bir kursa yazılmayanlar |
+| PUT | `/api/students/{id}` | Yenilə |
+| DELETE | `/api/students/{id}` | Sil (kurslar qalır) |
+| POST | `/api/students/{studentId}/courses/{courseId}` | Kursa yaz |
+| DELETE | `/api/students/{studentId}/courses/{courseId}` | Kursdan çıxar |
+| POST | `/api/courses` | Kurs yarat (title unikal) |
+| GET | `/api/courses` | Hamısı |
+| GET | `/api/courses/{id}` | Biri |
+| GET | `/api/courses/student/{studentId}` | Tələbənin kursları |
+| GET | `/api/courses/{id}/students` | Kursun tələbələri |
+| GET | `/api/courses/{id}/students/count` | Kursdakı tələbə sayı |
+| PUT | `/api/courses/{id}` | Yenilə |
+| DELETE | `/api/courses/{id}` | Sil (əvvəl tələbələrlə əlaqə qırılır) |
 
 ## Modul 4: Author ↔ AuthorBook ↔ Book (ManyToMany, 3-cü entity)
 
-Hazırlanır.
+| Metod | URL | Təsvir |
+| --- | --- | --- |
+| POST | `/api/authors` | Müəllif yarat (eyni ad+soyad olmaz) |
+| GET | `/api/authors/{id}` | Müəllif |
+| GET | `/api/authors?country=Azerbaijan` | Hamısı, country verilsə filter |
+| GET | `/api/authors/without-books` | Kitabı olmayan müəlliflər |
+| GET | `/api/authors/{id}/books` | Müəllifin kitabları |
+| PUT | `/api/authors/{id}` | Yenilə |
+| DELETE | `/api/authors/{id}` | Sil (kitablar qalır) |
+| POST | `/api/books` | Kitab yarat (title unikal) |
+| GET | `/api/books/{id}` | Müəlliflər ilə birlikdə |
+| GET | `/api/books?title=java` | Hamısı, title verilsə axtarış |
+| GET | `/api/books/cheaper-than?price=20` | Qiyməti verilən məbləğə bərabər və ya aşağı olanlar |
+| PUT | `/api/books/{id}` | Yenilə |
+| DELETE | `/api/books/{id}` | Sil (müəlliflər qalır) |
+| POST | `/api/books/{bookId}/authors/{authorId}` | Kitaba müəllif bağla |
+| DELETE | `/api/books/{bookId}/authors/{authorId}` | Əlaqəni sil |
+
+## Postman
+
+Collection: [`postman/school-api.postman_collection.json`](postman/school-api.postman_collection.json)
+
+Postman-da **Import** edin. `baseUrl` dəyişəni `http://localhost:8080/test-demo` olaraq təyin olunub.
