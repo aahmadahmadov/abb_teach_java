@@ -17,6 +17,7 @@ public interface CourseMapper {
     @Mapping(target = "students", ignore = true)
     Course toEntity(CreateCourseRequest course);
 
+    @Mapping(target = "students", ignore = true)
     CourseResponse toResponse(Course course);
 
     List<CourseResponse> toResponseList(List<Course> courses);
