@@ -1,5 +1,7 @@
 package com.spring_boot.school_department.service;
 
+import com.spring_boot.school_department.dto.request.CreateEmployeeRequest;
+import com.spring_boot.school_department.dto.request.UpdateEmployeeRequest;
 import com.spring_boot.school_department.dto.response.EmployeeResponse;
 import com.spring_boot.school_department.entity.Department;
 import com.spring_boot.school_department.entity.Employee;
@@ -12,12 +14,14 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
 @Getter
-@Transactional
+@Transactional(readOnly = true)
 public class EmployeeService {
 
     private final EmployeeRepository employeeRepository;
@@ -26,8 +30,55 @@ public class EmployeeService {
     private final EmployeeMapper employeeMapper;
 
     @Transactional
-    public EmployeeResponse create(Employee employee) {
-        //
+    public EmployeeResponse create(CreateEmployeeRequest request) {
+        Department department = findDepartment(request.departmentId());
+
+        if (employeeRepository.existsByNameAndSurnameAndDepartmentId(request.name(), request.surname(), request.departmentId())) {
+            throw new IllegalArgumentException("Employee with the same name and surname already exists in this department.");
+        }
+
+        Employee employee = employeeMapper.toEntity(request);
+        employee.setDepartment(department);
+
+        return employeeMapper.toResponse(employeeRepository.save(employee));
+    }
+
+    public List<EmployeeResponse> getEmployeesBySalaryRange(BigDecimal min, BigDecimal max) {
+
+        if (min.compareTo(max) > 0) {
+            throw new IllegalArgumentException("min must not be greater than max");
+        }
+
+        return employeeMapper.toResponseList(employeeRepository.findAllBySalaryBetween(min, max));
+    }
+
+    @Transactional
+    public EmployeeResponse updateEmployee(Long id, UpdateEmployeeRequest request) {
+
+        Employee employee = findEmployee(id);
+        Department department = findDepartment(request.departmentId());
+
+        if (employeeRepository.existsByNameAndSurnameAndDepartmentIdAndIdNot(
+                request.name(), request.surname(), department.getId(), id)) {
+            throw new IllegalStateException("Employee already exists in this department");
+        }
+
+        employeeMapper.updateEntity(request, employee);
+        employee.setDepartment(department);
+
+        return employeeMapper.toResponse(employee);
+    }
+
+    public BigDecimal getAverageSalaryByDepartment(Long departmentId) {
+        BigDecimal avgSalary = employeeRepository
+                .findAverageSalaryByDepartmentId(findDepartment(departmentId).getId());
+
+        return avgSalary != null ? avgSalary : BigDecimal.ZERO;
+    }
+
+    @Transactional
+    public void delete(Long id) {
+        employeeRepository.delete(findEmployee(id));
     }
 
     public EmployeeResponse getById(Long id) {

@@ -1,5 +1,6 @@
 package com.spring_boot.school_department.controller.v1;
 
+import com.spring_boot.school_department.dto.request.CreateEmployeeRequest;
 import com.spring_boot.school_department.dto.request.UpdateEmployeeRequest;
 import com.spring_boot.school_department.dto.response.EmployeeResponse;
 import com.spring_boot.school_department.service.EmployeeService;
@@ -19,7 +20,7 @@ public class EmployeeController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public EmployeeResponse create(@RequestBody EmployeeRequest request) {
+    public EmployeeResponse create(@RequestBody CreateEmployeeRequest request) {
         return employeeService.create(request);
     }
 
@@ -56,6 +57,6 @@ public class EmployeeController {
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteEmployee(@PathVariable Long id) {
-        employeeService.deleteEmployee(id);
+        employeeService.delete(id);
     }
 }

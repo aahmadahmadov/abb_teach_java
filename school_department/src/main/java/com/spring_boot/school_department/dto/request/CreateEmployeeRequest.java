@@ -5,6 +5,7 @@ import java.math.BigDecimal;
 public record CreateEmployeeRequest(
         String name,
         String surname,
-        BigDecimal salary
+        BigDecimal salary,
+        Long departmentId
 ) {
 }
