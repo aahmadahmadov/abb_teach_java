@@ -35,4 +35,9 @@ public class Course extends BaseEntity {
     @ManyToMany(mappedBy = "courses", fetch = FetchType.LAZY)
     private Set<Student> students = new HashSet<>();
 
+    public void removeAllStudents() {
+        students.forEach(student -> student.getCourses().remove(this));
+        students.clear();
+    }
+
 }

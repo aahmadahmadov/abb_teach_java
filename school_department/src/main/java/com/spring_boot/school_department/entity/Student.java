@@ -36,12 +36,12 @@ public class Student extends BaseEntity {
 
     @ManyToMany(cascade = {CascadeType.PERSIST, CascadeType.MERGE}, fetch = FetchType.LAZY)
     @JoinTable(
-            name = "student_courses",
+            name = "student_course",
             joinColumns = @JoinColumn(name = "student_id",
-                    foreignKey = @ForeignKey(name = "fk_student_courses_student_id")),
+                    foreignKey = @ForeignKey(name = "fk_sc_student")),
             inverseJoinColumns = @JoinColumn(name = "course_id",
-                    foreignKey = @ForeignKey(name = "fk_student_courses_course_id")),
-            uniqueConstraints = @UniqueConstraint(name = "uk_student_courses",
+                    foreignKey = @ForeignKey(name = "fk_sc_course")),
+            uniqueConstraints = @UniqueConstraint(name = "uk_student_course",
                     columnNames = {"student_id", "course_id"})
     )
     private Set<Course> courses = new HashSet<>();

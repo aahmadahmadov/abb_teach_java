@@ -7,10 +7,11 @@ import com.spring_boot.school_department.entity.Student;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
+import org.mapstruct.Named;
 
 import java.util.List;
 
-@Mapper(componentModel = "spring")
+@Mapper(componentModel = "spring", uses = {CourseMapper.class})
 public interface StudentMapper {
 
     @Mapping(target = "id", ignore = true)
@@ -20,7 +21,9 @@ public interface StudentMapper {
     @Mapping(target = "courses", ignore = true)
     StudentResponse toResponse(Student student);
 
-    @Mapping(target = "courses", ignore = true)
+    @Named("withCourses")
+    StudentResponse toDetailResponse(Student student);
+
     List<StudentResponse> toResponseList(List<Student> students);
 
     @Mapping(target = "id", ignore = true)

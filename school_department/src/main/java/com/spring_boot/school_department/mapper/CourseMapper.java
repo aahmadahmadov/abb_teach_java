@@ -10,17 +10,15 @@ import org.mapstruct.MappingTarget;
 
 import java.util.List;
 
-@Mapper(componentModel = "spring", uses = {StudentMapper.class})
+@Mapper(componentModel = "spring")
 public interface CourseMapper {
 
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "students", ignore = true)
     Course toEntity(CreateCourseRequest course);
 
-    @Mapping(target = "students", ignore = true)
     CourseResponse toResponse(Course course);
 
-    @Mapping(target = "students", ignore = true)
     List<CourseResponse> toResponseList(List<Course> courses);
 
     @Mapping(target = "id", ignore = true)
