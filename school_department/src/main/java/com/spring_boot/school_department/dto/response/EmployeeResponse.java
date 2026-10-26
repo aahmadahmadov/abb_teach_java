@@ -14,6 +14,7 @@ public record EmployeeResponse(
         @JsonProperty("created_at") LocalDateTime createdAt,
         @JsonProperty("updated_at") LocalDateTime updatedAt,
 
-        DepartmentResponse department
+        Long departmentId,
+        String departmentName
 ) {
 }

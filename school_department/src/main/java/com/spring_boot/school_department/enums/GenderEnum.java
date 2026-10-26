@@ -1,5 +1,7 @@
 package com.spring_boot.school_department.enums;
 
+import java.util.Arrays;
+
 public enum GenderEnum {
 
     MALE(1),
@@ -16,13 +18,10 @@ public enum GenderEnum {
     }
 
     public static GenderEnum findByDbCode(Integer dbCode) {
-        for (GenderEnum gender: GenderEnum.values()) {
-            if (gender.dbCode().equals(dbCode)) {
-                return gender;
-            }
-        }
-
-        throw new IllegalArgumentException("Invalid dbCode: " + dbCode);
+        return Arrays.stream(GenderEnum.values())
+                .filter(gender -> gender.dbCode().equals(dbCode))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Invalid dbCode: " + dbCode));
     }
 
 }

@@ -3,7 +3,6 @@ package com.spring_boot.school_department.entity;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.Check;
 
@@ -11,7 +10,6 @@ import java.math.BigDecimal;
 
 @Entity
 @Table(name = "employees")
-@RequiredArgsConstructor
 @NoArgsConstructor
 @Getter
 @Setter
@@ -29,7 +27,7 @@ public class Employee extends BaseEntity {
     private String surname;
 
     @Column(name = "salary", nullable = false, precision = 10, scale = 2, check = {
-            @CheckConstraint(name = "chk_salary_positive", constraint = "salary > 0")
+            @CheckConstraint(name = "chk_employee_salary", constraint = "salary > 0")
     })
     private BigDecimal salary;
 

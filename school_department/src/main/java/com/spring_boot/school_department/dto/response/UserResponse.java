@@ -1,7 +1,6 @@
 package com.spring_boot.school_department.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.spring_boot.school_department.entity.Passport;
 import com.spring_boot.school_department.enums.GenderEnum;
 
 import java.time.LocalDateTime;

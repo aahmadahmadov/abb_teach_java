@@ -4,7 +4,6 @@ import com.spring_boot.school_department.dto.request.CreateUserRequest;
 import com.spring_boot.school_department.dto.request.UpdateUserRequest;
 import com.spring_boot.school_department.dto.response.UserResponse;
 import com.spring_boot.school_department.entity.User;
-import com.spring_boot.school_department.enums.GenderEnum;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;

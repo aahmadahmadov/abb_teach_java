@@ -7,7 +7,7 @@ import com.spring_boot.school_department.entity.Department;
 import com.spring_boot.school_department.mapper.DepartmentMapper;
 import com.spring_boot.school_department.repository.DepartmentRepository;
 import com.spring_boot.school_department.repository.EmployeeRepository;
-import lombok.Getter;
+import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,7 +16,6 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
-@Getter
 @Transactional(readOnly = true)
 public class DepartmentService {
 
@@ -39,7 +38,7 @@ public class DepartmentService {
     }
 
     public List<DepartmentResponse> getAll() {
-        return departmentMapper.toResponseList(departmentRepository.findAll());
+        return departmentMapper.toResponseList(departmentRepository.findAllByOrderByNameAsc());
     }
 
     public List<DepartmentResponse> getWithoutEmployeesDepartments() {
@@ -47,7 +46,10 @@ public class DepartmentService {
     }
 
     public DepartmentResponse getById(Long id) {
-        return departmentMapper.toResponse(findDepartment(id));
+        Department department = departmentRepository.findByIdWithEmployees(id)
+                .orElseThrow(() -> new EntityNotFoundException("Department not found with id: " + id));
+
+        return departmentMapper.toDetailResponse(department);
     }
 
     @Transactional
@@ -75,7 +77,7 @@ public class DepartmentService {
 
     private Department findDepartment(Long id) {
         return departmentRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Department not found with id: " + id));
+                .orElseThrow(() -> new EntityNotFoundException("Department not found with id: " + id));
     }
 
 }

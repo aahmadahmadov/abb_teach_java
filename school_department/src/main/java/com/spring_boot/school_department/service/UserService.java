@@ -55,12 +55,15 @@ public class UserService {
     }
 
     public UserResponse getById(Long id) {
-        return userMapper.toResponse(findUser(id));
+        User user = userRepository.findByIdWithPassport(id)
+                .orElseThrow(() -> new EntityNotFoundException("User not found: " + id));
+
+        return userMapper.toResponse(user);
     }
 
     public UserResponse getByEmail(String email) {
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new IllegalStateException("User not found with email: " + email));
+                .orElseThrow(() -> new EntityNotFoundException("User not found with email: " + email));
 
         return userMapper.toResponse(user);
     }
@@ -72,9 +75,14 @@ public class UserService {
     }
 
     public List<UserResponse> findAllByGender(GenderEnum gender) {
+        if (gender == null) {
+            return userMapper.toResponseList(userRepository.findAllWithPassport());
+        }
+
         return userMapper.toResponseList(userRepository.findAllByGender(gender));
     }
 
+    @Transactional
     public void delete(Long id) {
         // cascade all oldugu ucun ona gore passportda gedir
         userRepository.delete(findUser(id));
@@ -84,7 +92,7 @@ public class UserService {
     public PassportResponse addPassport(Long id, CreatePassportRequest request) {
         User user = findUser(id);
 
-        if (user.getPassport() != null) {
+        if (passportRepository.existsByUserId(id)) {
             throw new IllegalStateException("User already has a passport: " + id);
         }
 

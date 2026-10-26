@@ -14,12 +14,16 @@ import java.util.List;
 public interface EmployeeMapper {
 
     @Mapping(target = "id", ignore = true)
+    @Mapping(target = "department", ignore = true)
     Employee toEntity(CreateEmployeeRequest request);
 
+    @Mapping(source = "department.id", target = "departmentId")
+    @Mapping(source = "department.name", target = "departmentName")
     EmployeeResponse toResponse(Employee employee);
 
     List<EmployeeResponse> toResponseList(List<Employee> employees);
 
     @Mapping(target = "id", ignore = true)
+    @Mapping(target = "department", ignore = true)
     void updateEntity(UpdateEmployeeRequest request, @MappingTarget Employee employee);
 }

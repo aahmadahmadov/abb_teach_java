@@ -3,14 +3,13 @@ package com.spring_boot.school_department.entity;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Entity
 @Table(name = "departments")
-@RequiredArgsConstructor
 @NoArgsConstructor
 @Getter
 @Setter
@@ -31,5 +30,15 @@ public class Department extends BaseEntity {
     private String phone;
 
     @OneToMany(mappedBy = "department", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<Employee> employees;
+    private List<Employee> employees = new ArrayList<>();
+
+    public void addEmployee(Employee employee) {
+        employees.add(employee);
+        employee.setDepartment(this);
+    }
+
+    public void removeEmployee(Employee employee) {
+        employees.remove(employee);
+        employee.setDepartment(null);
+    }
 }

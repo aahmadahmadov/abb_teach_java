@@ -18,10 +18,10 @@ public class Passport extends BaseEntity {
     @Column(name = "id", nullable = false)
     private Long id;
 
-    @Column(name = "serialNumber", nullable = false, unique = true, length = 20)
+    @Column(name = "serial_number", nullable = false, unique = true, length = 20)
     private String serialNumber;
 
-    @Column(name = "issueDate", nullable = false)
+    @Column(name = "issue_date", nullable = false)
     private LocalDate issueDate;
 
     @Column(name = "country", nullable = false, length = 50)

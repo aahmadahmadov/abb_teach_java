@@ -9,18 +9,15 @@ import com.spring_boot.school_department.mapper.EmployeeMapper;
 import com.spring_boot.school_department.repository.DepartmentRepository;
 import com.spring_boot.school_department.repository.EmployeeRepository;
 import jakarta.persistence.EntityNotFoundException;
-import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
-@Getter
 @Transactional(readOnly = true)
 public class EmployeeService {
 
@@ -34,11 +31,11 @@ public class EmployeeService {
         Department department = findDepartment(request.departmentId());
 
         if (employeeRepository.existsByNameAndSurnameAndDepartmentId(request.name(), request.surname(), request.departmentId())) {
-            throw new IllegalArgumentException("Employee with the same name and surname already exists in this department.");
+            throw new IllegalStateException("Employee with the same name and surname already exists in this department.");
         }
 
         Employee employee = employeeMapper.toEntity(request);
-        employee.setDepartment(department);
+        department.addEmployee(employee);
 
         return employeeMapper.toResponse(employeeRepository.save(employee));
     }
