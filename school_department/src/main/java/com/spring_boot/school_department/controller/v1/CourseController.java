@@ -18,13 +18,13 @@ public class CourseController {
 
     private final CourseService courseService;
 
-    @PostMapping
+    @PostMapping("/")
     @ResponseStatus(HttpStatus.CREATED)
     public CourseResponse create(@RequestBody CreateCourseRequest request) {
         return courseService.create(request);
     }
 
-    @GetMapping
+    @GetMapping("/")
     @ResponseStatus(HttpStatus.OK)
     public List<CourseResponse> getAll() {
         return courseService.getAll();

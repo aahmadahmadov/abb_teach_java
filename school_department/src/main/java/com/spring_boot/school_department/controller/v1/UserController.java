@@ -20,7 +20,7 @@ public class UserController {
 
     private final UserService userService;
 
-    @PostMapping
+    @PostMapping("/")
     @ResponseStatus(HttpStatus.CREATED)
     public UserResponse create(@RequestBody CreateUserRequest request) {
         return userService.create(request);
@@ -36,7 +36,7 @@ public class UserController {
         return userService.getByEmail(email);
     }
 
-    @GetMapping
+    @GetMapping("/")
     public List<UserResponse> getByGender(@RequestParam(required = false) GenderEnum gender) {
         return userService.findAllByGender(gender);
     }

@@ -17,7 +17,7 @@ public class DepartmentController {
 
     private final DepartmentService departmentService;
 
-    @PostMapping
+    @PostMapping("/")
     @ResponseStatus(HttpStatus.CREATED)
     public DepartmentResponse create(@RequestBody CreateDepartmentRequest request) {
         return departmentService.create(request);
@@ -29,7 +29,7 @@ public class DepartmentController {
         return departmentService.getById(id);
     }
 
-    @GetMapping
+    @GetMapping("/")
     @ResponseStatus(HttpStatus.OK)
     public List<DepartmentResponse> getAll() {
         return departmentService.getAll();

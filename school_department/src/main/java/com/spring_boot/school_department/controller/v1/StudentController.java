@@ -17,7 +17,7 @@ public class StudentController {
 
     private final StudentService studentService;
 
-    @PostMapping
+    @PostMapping("/")
     @ResponseStatus(HttpStatus.CREATED)
     public StudentResponse create(@RequestBody CreateStudentRequest request) {
         return studentService.create(request);
@@ -29,7 +29,7 @@ public class StudentController {
         return studentService.getById(id);
     }
 
-    @GetMapping
+    @GetMapping("/")
     @ResponseStatus(HttpStatus.OK)
     public List<StudentResponse> getAll() {
         return studentService.getAll();
