@@ -12,6 +12,7 @@ import com.spring_boot.school_department.repository.StudentRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
@@ -27,7 +28,7 @@ public class CourseService {
     private final CourseMapper courseMapper;
     private final StudentMapper studentMapper;
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRED)
     public CourseResponse create(CreateCourseRequest request) {
 
         if (courseRepository.existsByTitle(request.title())) {
@@ -69,7 +70,7 @@ public class CourseService {
         return studentRepository.countByCoursesId(id);
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRED)
     public CourseResponse update(Long id, UpdateCourseRequest request) {
         Course course = findCourse(id);
 
@@ -82,7 +83,12 @@ public class CourseService {
         return courseMapper.toResponse(course);
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRED)
+    public int increaseAllCredits(Integer amount) {
+        return courseRepository.increaseAllCredits(amount);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRED)
     public void delete(Long id) {
         Course course = courseRepository.findByIdWithStudents(id)
                 .orElseThrow(() -> new EntityNotFoundException("Course not found: " + id));

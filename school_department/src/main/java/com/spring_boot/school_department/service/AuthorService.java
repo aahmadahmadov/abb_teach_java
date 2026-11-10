@@ -12,6 +12,7 @@ import com.spring_boot.school_department.repository.BookRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
@@ -27,7 +28,7 @@ public class AuthorService {
     private final AuthorMapper authorMapper;
     private final BookMapper bookMapper;
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRED)
     public AuthorResponse create(CreateAuthorRequest request) {
 
         if (authorRepository.existsByNameAndSurname(request.name(), request.surname())) {
@@ -63,7 +64,7 @@ public class AuthorService {
         return bookMapper.toResponseList(bookRepository.findAllByAuthorBooksAuthorId(id));
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRED)
     public AuthorResponse update(Long id, UpdateAuthorRequest request) {
         Author author = findAuthor(id);
 
@@ -76,7 +77,7 @@ public class AuthorService {
         return authorMapper.toResponse(author);
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRED)
     public void delete(Long id) {
         authorRepository.delete(findAuthor(id));
     }

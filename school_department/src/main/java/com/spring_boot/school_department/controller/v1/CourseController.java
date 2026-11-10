@@ -60,6 +60,12 @@ public class CourseController {
         return courseService.update(id, request);
     }
 
+    @PutMapping("/credits")
+    @ResponseStatus(HttpStatus.OK)
+    public int increaseAllCredits(@RequestParam Integer amount) {
+        return courseService.increaseAllCredits(amount);
+    }
+
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable Long id) {

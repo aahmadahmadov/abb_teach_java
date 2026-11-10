@@ -2,7 +2,9 @@ package com.spring_boot.school_department.repository;
 
 import com.spring_boot.school_department.entity.Author;
 import org.springframework.data.jpa.repository.JpaRepository;
+import jakarta.persistence.QueryHint;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.QueryHints;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -14,6 +16,7 @@ public interface AuthorRepository extends JpaRepository<Author, Long> {
 
     boolean existsByNameAndSurnameAndIdNot(String name, String surname, Long id);
 
+    @QueryHints(@QueryHint(name = "org.hibernate.cacheable", value = "true"))
     List<Author> findAllByCountry(String country);
 
     @Query("select a from Author a where a.authorBooks is empty")

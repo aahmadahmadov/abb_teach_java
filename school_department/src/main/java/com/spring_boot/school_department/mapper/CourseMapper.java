@@ -15,6 +15,7 @@ public interface CourseMapper {
 
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "students", ignore = true)
+    @Mapping(target = "capacity", ignore = true)
     Course toEntity(CreateCourseRequest course);
 
     @Mapping(target = "students", ignore = true)
@@ -24,5 +25,6 @@ public interface CourseMapper {
 
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "students", ignore = true)
+    @Mapping(target = "capacity", ignore = true)
     void updateEntity(UpdateCourseRequest request, @MappingTarget Course course);
 }

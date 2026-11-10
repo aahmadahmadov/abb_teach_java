@@ -1197,6 +1197,347 @@
           }
         }
       ]
+    },
+    {
+      "name": "Cache",
+      "item": [
+        {
+          "name": "GET /api/cache/stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/cache/stats",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "cache",
+                "stats"
+              ]
+            }
+          }
+        },
+        {
+          "name": "DELETE /api/cache",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/cache",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "cache"
+              ]
+            }
+          }
+        },
+        {
+          "name": "DELETE /api/cache/courses",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/cache/courses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "cache",
+                "courses"
+              ]
+            }
+          }
+        },
+        {
+          "name": "DELETE /api/cache/stats",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/cache/stats",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "cache",
+                "stats"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /api/courses/1",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/courses/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "courses",
+                "1"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /api/authors/",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/authors/?country=Azerbaijan",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "authors"
+              ],
+              "query": [
+                {
+                  "key": "country",
+                  "value": "Azerbaijan"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "PUT /api/courses/credits (bulk)",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/courses/credits?amount=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "courses",
+                "credits"
+              ],
+              "query": [
+                {
+                  "key": "amount",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Transactions",
+      "item": [
+        {
+          "name": "POST transfer (C1 ok)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/employees/1/transfer",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "employees",
+                "1",
+                "transfer"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"departmentId\": 2,\n  \"raisePercent\": 15\n}"
+            }
+          }
+        },
+        {
+          "name": "POST transfer (C1 limit keçir)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/employees/3/transfer",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "employees",
+                "3",
+                "transfer"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"departmentId\": 2,\n  \"raisePercent\": 15\n}"
+            }
+          }
+        },
+        {
+          "name": "POST /api/tx-demo/reserve-seat/1",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/tx-demo/reserve-seat/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tx-demo",
+                "reserve-seat",
+                "1"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /api/students/1/courses/5",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/students/1/courses/5",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "students",
+                "1",
+                "courses",
+                "5"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Isolation",
+      "item": [
+        {
+          "name": "GET /api/isolation/departments/1/salary-report",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/isolation/departments/1/salary-report?isolation=READ_COMMITTED&delayMs=8000",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "isolation",
+                "departments",
+                "1",
+                "salary-report"
+              ],
+              "query": [
+                {
+                  "key": "isolation",
+                  "value": "READ_COMMITTED"
+                },
+                {
+                  "key": "delayMs",
+                  "value": "8000"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /api/isolation/employees/4/raise",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/isolation/employees/4/raise?amount=100&isolation=READ_COMMITTED&delayMs=8000",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "isolation",
+                "employees",
+                "4",
+                "raise"
+              ],
+              "query": [
+                {
+                  "key": "amount",
+                  "value": "100"
+                },
+                {
+                  "key": "isolation",
+                  "value": "READ_COMMITTED"
+                },
+                {
+                  "key": "delayMs",
+                  "value": "8000"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /api/isolation/courses/5/enroll/1",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/isolation/courses/5/enroll/1?isolation=SERIALIZABLE&delayMs=8000",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "isolation",
+                "courses",
+                "5",
+                "enroll",
+                "1"
+              ],
+              "query": [
+                {
+                  "key": "isolation",
+                  "value": "SERIALIZABLE"
+                },
+                {
+                  "key": "delayMs",
+                  "value": "8000"
+                }
+              ]
+            }
+          }
+        }
+      ]
     }
   ]
 }

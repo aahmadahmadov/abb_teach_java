@@ -1,16 +1,19 @@
 package com.spring_boot.school_department.service;
 
 import com.spring_boot.school_department.dto.request.CreateEmployeeRequest;
+import com.spring_boot.school_department.dto.request.TransferEmployeeRequest;
 import com.spring_boot.school_department.dto.request.UpdateEmployeeRequest;
 import com.spring_boot.school_department.dto.response.EmployeeResponse;
 import com.spring_boot.school_department.entity.Department;
 import com.spring_boot.school_department.entity.Employee;
+import com.spring_boot.school_department.enums.AuditStatus;
 import com.spring_boot.school_department.mapper.EmployeeMapper;
 import com.spring_boot.school_department.repository.DepartmentRepository;
 import com.spring_boot.school_department.repository.EmployeeRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -24,9 +27,12 @@ public class EmployeeService {
     private final EmployeeRepository employeeRepository;
     private final DepartmentRepository departmentRepository;
 
+    private final SalaryService salaryService;
+    private final AuditLogService auditLogService;
+
     private final EmployeeMapper employeeMapper;
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRED)
     public EmployeeResponse create(CreateEmployeeRequest request) {
         Department department = findDepartment(request.departmentId());
 
@@ -49,7 +55,7 @@ public class EmployeeService {
         return employeeMapper.toResponseList(employeeRepository.findAllBySalaryBetween(min, max));
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRED)
     public EmployeeResponse updateEmployee(Long id, UpdateEmployeeRequest request) {
 
         Employee employee = findEmployee(id);
@@ -66,6 +72,27 @@ public class EmployeeService {
         return employeeMapper.toResponse(employee);
     }
 
+    // departament ve salary eyni transactiondadir, biri qirilanda ikiside rollback olur.
+    // audit ayrı transactionda yazılır, buna gore rollback olsa da qalır
+    @Transactional(propagation = Propagation.REQUIRED)
+    public EmployeeResponse transfer(Long id, TransferEmployeeRequest request) {
+        try {
+            Employee employee = findEmployee(id);
+            Department department = findDepartment(request.departmentId());
+
+            employee.setDepartment(department);
+            salaryService.raise(employee, request.raisePercent());
+
+            auditLogService.log("TRANSFER", "Employee", id, AuditStatus.SUCCESS,
+                    "Transferred to department " + department.getId());
+
+            return employeeMapper.toResponse(employee);
+        } catch (RuntimeException ex) {
+            auditLogService.log("TRANSFER", "Employee", id, AuditStatus.FAILED, ex.getMessage());
+            throw ex;
+        }
+    }
+
     public BigDecimal getAverageSalaryByDepartment(Long departmentId) {
         BigDecimal avgSalary = employeeRepository
                 .findAverageSalaryByDepartmentId(findDepartment(departmentId).getId());
@@ -73,7 +100,7 @@ public class EmployeeService {
         return avgSalary != null ? avgSalary : BigDecimal.ZERO;
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRED)
     public void delete(Long id) {
         employeeRepository.delete(findEmployee(id));
     }

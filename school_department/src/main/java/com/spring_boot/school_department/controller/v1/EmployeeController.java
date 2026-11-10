@@ -1,6 +1,7 @@
 package com.spring_boot.school_department.controller.v1;
 
 import com.spring_boot.school_department.dto.request.CreateEmployeeRequest;
+import com.spring_boot.school_department.dto.request.TransferEmployeeRequest;
 import com.spring_boot.school_department.dto.request.UpdateEmployeeRequest;
 import com.spring_boot.school_department.dto.response.EmployeeResponse;
 import com.spring_boot.school_department.service.EmployeeService;
@@ -52,6 +53,12 @@ public class EmployeeController {
     @ResponseStatus(HttpStatus.OK)
     public EmployeeResponse updateEmployee(@PathVariable Long id, @RequestBody UpdateEmployeeRequest employee) {
         return employeeService.updateEmployee(id, employee);
+    }
+
+    @PostMapping("/{id}/transfer")
+    @ResponseStatus(HttpStatus.OK)
+    public EmployeeResponse transfer(@PathVariable Long id, @RequestBody TransferEmployeeRequest request) {
+        return employeeService.transfer(id, request);
     }
 
     @DeleteMapping("/{id}")

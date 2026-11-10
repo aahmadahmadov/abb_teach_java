@@ -12,6 +12,7 @@ import com.spring_boot.school_department.repository.BookRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -28,7 +29,7 @@ public class BookService {
 
     private final BookMapper bookMapper;
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRED)
     public BookResponse create(CreateBookRequest request) {
 
         if (bookRepository.existsByTitle(request.title())) {
@@ -58,7 +59,7 @@ public class BookService {
         return bookMapper.toResponseList(bookRepository.findAllByPriceLessThanEqualOrderByPriceAsc(price));
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRED)
     public BookResponse update(Long id, UpdateBookRequest request) {
         Book book = findBook(id);
 
@@ -71,12 +72,12 @@ public class BookService {
         return bookMapper.toResponse(book);
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRED)
     public void delete(Long id) {
         bookRepository.delete(findBook(id));
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRED)
     public BookResponse addAuthor(Long bookId, Long authorId) {
         Book book = findBookWithAuthors(bookId);
         Author author = authorRepository.findById(authorId)
@@ -91,7 +92,7 @@ public class BookService {
         return bookMapper.toDetailResponse(book);
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRED)
     public void removeAuthor(Long bookId, Long authorId) {
 
         if (authorBookRepository.deleteByAuthorIdAndBookId(authorId, bookId) == 0) {

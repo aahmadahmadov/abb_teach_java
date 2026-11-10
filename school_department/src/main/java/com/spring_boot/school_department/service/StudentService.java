@@ -11,6 +11,7 @@ import com.spring_boot.school_department.repository.StudentRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
@@ -23,9 +24,11 @@ public class StudentService {
     private final StudentRepository studentRepository;
     private final CourseRepository courseRepository;
 
+    private final EnrollmentService enrollmentService;
+
     private final StudentMapper studentMapper;
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRED)
     public StudentResponse create(CreateStudentRequest request) {
         Student student = studentMapper.toEntity(request);
         studentRepository.save(student);
@@ -48,7 +51,7 @@ public class StudentService {
         return studentMapper.toResponseList(studentRepository.findAllWithoutCourses());
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRED)
     public StudentResponse update(Long id, UpdateStudentRequest request) {
         Student student = findStudent(id);
 
@@ -57,12 +60,12 @@ public class StudentService {
         return studentMapper.toResponse(student);
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRED)
     public void delete(Long id) {
         studentRepository.delete(findStudent(id));
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRED)
     public StudentResponse enroll(Long studentId, Long courseId) {
         Student student = findStudent(studentId);
         Course course = findCourse(courseId);
@@ -71,12 +74,14 @@ public class StudentService {
             throw new IllegalStateException("Student already enrolled in course: " + courseId);
         }
 
+        enrollmentService.reserveSeat(courseId);
+
         student.addCourse(course);
 
         return studentMapper.toDetailResponse(student);
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRED)
     public void unenroll(Long studentId, Long courseId) {
         Student student = findStudent(studentId);
         Course course = findCourse(courseId);

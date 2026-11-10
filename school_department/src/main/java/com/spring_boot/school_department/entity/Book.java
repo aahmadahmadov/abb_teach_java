@@ -1,6 +1,8 @@
 package com.spring_boot.school_department.entity;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.Cache;
+import org.hibernate.annotations.CacheConcurrencyStrategy;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -10,6 +12,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
+@Cacheable
+@Cache(usage = CacheConcurrencyStrategy.NONSTRICT_READ_WRITE, region = "books")
 @Table(name = "books")
 @NoArgsConstructor
 @Getter
@@ -32,6 +36,7 @@ public class Book extends BaseEntity {
     @Column(name = "page_count", nullable = false)
     private Integer pageCount;
 
+    @Cache(usage = CacheConcurrencyStrategy.READ_WRITE, region = "book-authorBooks")
     @OneToMany(mappedBy = "book", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
     private List<AuthorBook> authorBooks = new ArrayList<>();
 

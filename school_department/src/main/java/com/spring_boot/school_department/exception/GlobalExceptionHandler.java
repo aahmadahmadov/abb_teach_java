@@ -1,9 +1,11 @@
 package com.spring_boot.school_department.exception;
 
 import jakarta.persistence.EntityNotFoundException;
+import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -37,6 +39,18 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ErrorResponse> handleIntegrity(DataIntegrityViolationException ex) {
         return build(HttpStatus.CONFLICT, "Data integrity violation: " + ex.getMostSpecificCause().getMessage());
+    }
+
+    // 409
+    @ExceptionHandler(IllegalTransactionStateException.class)
+    public ResponseEntity<ErrorResponse> handleTransactionState(IllegalTransactionStateException ex) {
+        return build(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+    // 409
+    @ExceptionHandler(ConcurrencyFailureException.class)
+    public ResponseEntity<ErrorResponse> handleConcurrency(ConcurrencyFailureException ex) {
+        return build(HttpStatus.CONFLICT, "Concurrent update: " + ex.getMostSpecificCause().getMessage());
     }
 
     private ResponseEntity<ErrorResponse> build(HttpStatus status, String message) {

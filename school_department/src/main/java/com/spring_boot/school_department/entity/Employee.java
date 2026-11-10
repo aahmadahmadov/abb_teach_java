@@ -8,6 +8,9 @@ import org.hibernate.annotations.Check;
 
 import java.math.BigDecimal;
 
+// Second level cache uzun muddet deyismeyen sadece oxunan data ucun daha elverislidi,
+// employee-lerin salary melumati tez-tez deyisir ona gore burda elave xerc yaranir
+// buna gore employee datasini cacheable etmirik
 @Entity
 @Table(name = "employees")
 @NoArgsConstructor

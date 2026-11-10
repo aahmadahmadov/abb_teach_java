@@ -15,6 +15,7 @@ import com.spring_boot.school_department.repository.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
@@ -30,7 +31,7 @@ public class UserService {
     private final PassportMapper passportMapper;
     private final UserMapper userMapper;
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRED)
     public UserResponse create(CreateUserRequest request) {
         if (userRepository.existsByEmail(request.email())) {
             throw new IllegalStateException("Email already exists: " + request.email());
@@ -42,7 +43,7 @@ public class UserService {
         return userMapper.toResponse(user);
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRED)
     public UserResponse update(Long id, UpdateUserRequest request) {
         User user = findUser(id);
 
@@ -82,13 +83,13 @@ public class UserService {
         return userMapper.toResponseList(userRepository.findAllByGender(gender));
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRED)
     public void delete(Long id) {
         // cascade all oldugu ucun ona gore passportda gedir
         userRepository.delete(findUser(id));
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRED)
     public PassportResponse addPassport(Long id, CreatePassportRequest request) {
         User user = findUser(id);
 
@@ -113,7 +114,7 @@ public class UserService {
         return passportMapper.toResponse(passport);
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRED)
     public void deletePassportByUserId(Long userId) {
         User user = findUser(userId);
 

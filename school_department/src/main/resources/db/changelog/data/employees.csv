@@ -1,0 +1,11 @@
+name,surname,salary,department_id,created_at,version_id
+Ali,Mammadov,3000.00,1,2026-11-10 10:00:00,0
+Vusal,Aliyev,4500.00,1,2026-11-10 10:00:00,0
+Leyla,Hasanova,9500.00,1,2026-11-10 10:00:00,0
+Nigar,Quliyeva,2500.00,1,2026-11-10 10:00:00,0
+Rashad,Huseynov,2800.00,2,2026-11-10 10:00:00,0
+Aysel,Ismayilova,3200.00,2,2026-11-10 10:00:00,0
+Orxan,Babayev,2000.00,2,2026-11-10 10:00:00,0
+Kamran,Rzayev,5000.00,3,2026-11-10 10:00:00,0
+Gunel,Abbasova,4200.00,3,2026-11-10 10:00:00,0
+Tural,Safarov,3900.00,3,2026-11-10 10:00:00,0

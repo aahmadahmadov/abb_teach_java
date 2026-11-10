@@ -1,11 +1,15 @@
 package com.spring_boot.school_department.entity;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.Cache;
+import org.hibernate.annotations.CacheConcurrencyStrategy;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Entity
+@Cacheable
+@Cache(usage = CacheConcurrencyStrategy.READ_WRITE, region = "author-books")
 @Table(name = "author_book", uniqueConstraints = @UniqueConstraint(
         name = "uk_author_book", columnNames = {"author_id", "book_id"}))
 @NoArgsConstructor

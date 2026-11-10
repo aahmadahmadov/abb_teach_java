@@ -2,6 +2,7 @@ package com.spring_boot.school_department.repository;
 
 import com.spring_boot.school_department.entity.Course;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -23,4 +24,9 @@ public interface CourseRepository extends JpaRepository<Course, Long> {
 
     @Query("select c from Course c order by c.title")
     List<Course> findAllOrderByTitle();
+
+    // bulk update cache-den kecmir, ona gore hibernate butun courses regionunu temizleyir
+    @Modifying
+    @Query("update Course c set c.credit = c.credit + :amount")
+    int increaseAllCredits(@Param("amount") Integer amount);
 }

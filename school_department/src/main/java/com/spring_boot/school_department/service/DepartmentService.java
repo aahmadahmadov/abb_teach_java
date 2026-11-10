@@ -10,6 +10,7 @@ import com.spring_boot.school_department.repository.EmployeeRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
@@ -24,7 +25,7 @@ public class DepartmentService {
 
     private final DepartmentMapper departmentMapper;
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRED)
     public DepartmentResponse create(CreateDepartmentRequest request) {
 
         if (departmentRepository.existsByName(request.name())) {
@@ -52,7 +53,7 @@ public class DepartmentService {
         return departmentMapper.toDetailResponse(department);
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRED)
     public DepartmentResponse update(Long id, UpdateDepartmentRequest request) {
         Department department = findDepartment(id);
 
@@ -64,7 +65,7 @@ public class DepartmentService {
         return departmentMapper.toResponse(department);
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRED)
     public void delete(Long id) {
         Department department = findDepartment(id);
 
