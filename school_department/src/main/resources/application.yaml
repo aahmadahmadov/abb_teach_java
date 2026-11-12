@@ -28,13 +28,30 @@ spring:
           cache:
             provider: org.ehcache.jsr107.EhcacheCachingProvider
             uri: classpath:ehcache.xml
+  messages:
+    basename: i18n/messages
+    encoding: UTF-8
+    fallback-to-system-locale: false
   liquibase:
     enabled: true
     change-log: classpath:db/changelog/db.changelog-master.yaml
     contexts: dev
 
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    try-it-out-enabled: true
+
 logging:
+  pattern:
+    level: "%5p [%X{traceId:-}]"
+  file:
+    name: logs/app.log
   level:
+    com.spring_boot.school_department.logging: debug
     org.hibernate.cache: debug
     org.springframework.orm.jpa.JpaTransactionManager: debug
     org.springframework.transaction: trace
