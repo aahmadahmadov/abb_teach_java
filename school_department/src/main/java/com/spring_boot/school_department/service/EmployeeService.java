@@ -7,10 +7,13 @@ import com.spring_boot.school_department.dto.response.EmployeeResponse;
 import com.spring_boot.school_department.entity.Department;
 import com.spring_boot.school_department.entity.Employee;
 import com.spring_boot.school_department.enums.AuditStatus;
+import com.spring_boot.school_department.enums.ErrorCode;
+import com.spring_boot.school_department.exception.AlreadyExistsException;
+import com.spring_boot.school_department.exception.InvalidRequestException;
+import com.spring_boot.school_department.exception.NotFoundException;
 import com.spring_boot.school_department.mapper.EmployeeMapper;
 import com.spring_boot.school_department.repository.DepartmentRepository;
 import com.spring_boot.school_department.repository.EmployeeRepository;
-import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -37,7 +40,7 @@ public class EmployeeService {
         Department department = findDepartment(request.departmentId());
 
         if (employeeRepository.existsByNameAndSurnameAndDepartmentId(request.name(), request.surname(), request.departmentId())) {
-            throw new IllegalStateException("Employee with the same name and surname already exists in this department.");
+            throw new AlreadyExistsException(ErrorCode.EMPLOYEE_ALREADY_EXISTS, request.name() + " " + request.surname());
         }
 
         Employee employee = employeeMapper.toEntity(request);
@@ -49,7 +52,7 @@ public class EmployeeService {
     public List<EmployeeResponse> getEmployeesBySalaryRange(BigDecimal min, BigDecimal max) {
 
         if (min.compareTo(max) > 0) {
-            throw new IllegalArgumentException("min must not be greater than max");
+            throw new InvalidRequestException(ErrorCode.EMPLOYEE_SALARY_RANGE, min, max);
         }
 
         return employeeMapper.toResponseList(employeeRepository.findAllBySalaryBetween(min, max));
@@ -63,7 +66,7 @@ public class EmployeeService {
 
         if (employeeRepository.existsByNameAndSurnameAndDepartmentIdAndIdNot(
                 request.name(), request.surname(), department.getId(), id)) {
-            throw new IllegalStateException("Employee already exists in this department");
+            throw new AlreadyExistsException(ErrorCode.EMPLOYEE_ALREADY_EXISTS, request.name() + " " + request.surname());
         }
 
         employeeMapper.updateEntity(request, employee);
@@ -116,11 +119,11 @@ public class EmployeeService {
 
     private Employee findEmployee(Long id) {
         return employeeRepository.findByIdWithDepartment(id)
-                .orElseThrow(() -> new EntityNotFoundException("Employee not found: " + id));
+                .orElseThrow(() -> new NotFoundException(ErrorCode.EMPLOYEE_NOT_FOUND, id));
     }
 
     private Department findDepartment(Long id) {
         return departmentRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Department not found: " + id));
+                .orElseThrow(() -> new NotFoundException(ErrorCode.DEPARTMENT_NOT_FOUND, id));
     }
 }

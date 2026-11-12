@@ -5,11 +5,13 @@ import com.spring_boot.school_department.dto.request.UpdateBookRequest;
 import com.spring_boot.school_department.dto.response.BookResponse;
 import com.spring_boot.school_department.entity.Author;
 import com.spring_boot.school_department.entity.Book;
+import com.spring_boot.school_department.enums.ErrorCode;
+import com.spring_boot.school_department.exception.AlreadyExistsException;
+import com.spring_boot.school_department.exception.NotFoundException;
 import com.spring_boot.school_department.mapper.BookMapper;
 import com.spring_boot.school_department.repository.AuthorBookRepository;
 import com.spring_boot.school_department.repository.AuthorRepository;
 import com.spring_boot.school_department.repository.BookRepository;
-import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -33,7 +35,7 @@ public class BookService {
     public BookResponse create(CreateBookRequest request) {
 
         if (bookRepository.existsByTitle(request.title())) {
-            throw new IllegalStateException("Book with title already exists: " + request.title());
+            throw new AlreadyExistsException(ErrorCode.BOOK_ALREADY_EXISTS, request.title());
         }
 
         Book book = bookMapper.toEntity(request);
@@ -64,7 +66,7 @@ public class BookService {
         Book book = findBook(id);
 
         if (bookRepository.existsByTitleAndIdNot(request.title(), id)) {
-            throw new IllegalStateException("Book with title already exists: " + request.title());
+            throw new AlreadyExistsException(ErrorCode.BOOK_ALREADY_EXISTS, request.title());
         }
 
         bookMapper.updateEntity(request, book);
@@ -81,10 +83,10 @@ public class BookService {
     public BookResponse addAuthor(Long bookId, Long authorId) {
         Book book = findBookWithAuthors(bookId);
         Author author = authorRepository.findById(authorId)
-                .orElseThrow(() -> new EntityNotFoundException("Author not found: " + authorId));
+                .orElseThrow(() -> new NotFoundException(ErrorCode.AUTHOR_NOT_FOUND, authorId));
 
         if (authorBookRepository.existsByAuthorIdAndBookId(authorId, bookId)) {
-            throw new IllegalStateException("Author " + authorId + " is already linked to book " + bookId);
+            throw new AlreadyExistsException(ErrorCode.BOOK_AUTHOR_ALREADY_LINKED, authorId, bookId);
         }
 
         book.addAuthor(author);
@@ -96,17 +98,17 @@ public class BookService {
     public void removeAuthor(Long bookId, Long authorId) {
 
         if (authorBookRepository.deleteByAuthorIdAndBookId(authorId, bookId) == 0) {
-            throw new EntityNotFoundException("Author " + authorId + " is not linked to book " + bookId);
+            throw new NotFoundException(ErrorCode.BOOK_AUTHOR_NOT_LINKED, authorId, bookId);
         }
     }
 
     private Book findBook(Long id) {
         return bookRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Book not found: " + id));
+                .orElseThrow(() -> new NotFoundException(ErrorCode.BOOK_NOT_FOUND, id));
     }
 
     private Book findBookWithAuthors(Long id) {
         return bookRepository.findByIdWithAuthors(id)
-                .orElseThrow(() -> new EntityNotFoundException("Book not found: " + id));
+                .orElseThrow(() -> new NotFoundException(ErrorCode.BOOK_NOT_FOUND, id));
     }
 }

@@ -7,12 +7,14 @@ import com.spring_boot.school_department.dto.response.PassportResponse;
 import com.spring_boot.school_department.dto.response.UserResponse;
 import com.spring_boot.school_department.entity.Passport;
 import com.spring_boot.school_department.entity.User;
+import com.spring_boot.school_department.enums.ErrorCode;
 import com.spring_boot.school_department.enums.GenderEnum;
+import com.spring_boot.school_department.exception.AlreadyExistsException;
+import com.spring_boot.school_department.exception.NotFoundException;
 import com.spring_boot.school_department.mapper.PassportMapper;
 import com.spring_boot.school_department.mapper.UserMapper;
 import com.spring_boot.school_department.repository.PassportRepository;
 import com.spring_boot.school_department.repository.UserRepository;
-import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -34,7 +36,7 @@ public class UserService {
     @Transactional(propagation = Propagation.REQUIRED)
     public UserResponse create(CreateUserRequest request) {
         if (userRepository.existsByEmail(request.email())) {
-            throw new IllegalStateException("Email already exists: " + request.email());
+            throw new AlreadyExistsException(ErrorCode.USER_EMAIL_EXISTS, request.email());
         }
 
         User user = userMapper.toEntity(request);
@@ -48,7 +50,7 @@ public class UserService {
         User user = findUser(id);
 
         if (userRepository.existsByEmailAndIdNot(request.email(), id)) {
-            throw new IllegalStateException("Email already exists: " + request.email());
+            throw new AlreadyExistsException(ErrorCode.USER_EMAIL_USED, request.email());
         }
 
         userMapper.updateEntity(request, user);
@@ -57,14 +59,14 @@ public class UserService {
 
     public UserResponse getById(Long id) {
         User user = userRepository.findByIdWithPassport(id)
-                .orElseThrow(() -> new EntityNotFoundException("User not found: " + id));
+                .orElseThrow(() -> new NotFoundException(ErrorCode.USER_NOT_FOUND, id));
 
         return userMapper.toResponse(user);
     }
 
     public UserResponse getByEmail(String email) {
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new EntityNotFoundException("User not found with email: " + email));
+                .orElseThrow(() -> new NotFoundException(ErrorCode.USER_NOT_FOUND, email));
 
         return userMapper.toResponse(user);
     }
@@ -94,11 +96,11 @@ public class UserService {
         User user = findUser(id);
 
         if (passportRepository.existsByUserId(id)) {
-            throw new IllegalStateException("User already has a passport: " + id);
+            throw new AlreadyExistsException(ErrorCode.USER_PASSPORT_EXISTS, id);
         }
 
         if (passportRepository.existsBySerialNumber(request.serialNumber())) {
-            throw new IllegalStateException("Passport serial number already exists: " + request.serialNumber());
+            throw new AlreadyExistsException(ErrorCode.PASSPORT_SERIAL_EXISTS, request.serialNumber());
         }
 
         Passport passport = passportMapper.toEntity(request);
@@ -109,7 +111,7 @@ public class UserService {
 
     public PassportResponse getPassportByUserId(Long userId) {
         Passport passport = passportRepository.findByUserId(userId)
-                .orElseThrow(() -> new EntityNotFoundException("Passport not found for user: " + userId));
+                .orElseThrow(() -> new NotFoundException(ErrorCode.PASSPORT_NOT_FOUND, userId));
 
         return passportMapper.toResponse(passport);
     }
@@ -119,7 +121,7 @@ public class UserService {
         User user = findUser(userId);
 
         if (user.getPassport() == null) {
-            throw new EntityNotFoundException("Passport not found for user: " + userId);
+            throw new NotFoundException(ErrorCode.PASSPORT_NOT_FOUND, userId);
         }
 
         user.setPassport(null);
@@ -127,6 +129,6 @@ public class UserService {
 
     private User findUser(Long id) {
         return userRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("User not found: " + id));
+                .orElseThrow(() -> new NotFoundException(ErrorCode.USER_NOT_FOUND, id));
     }
 }

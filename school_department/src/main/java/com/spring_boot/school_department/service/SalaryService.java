@@ -1,6 +1,8 @@
 package com.spring_boot.school_department.service;
 
 import com.spring_boot.school_department.entity.Employee;
+import com.spring_boot.school_department.enums.ErrorCode;
+import com.spring_boot.school_department.exception.BusinessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,7 +24,7 @@ public class SalaryService {
                 .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
 
         if (newSalary.compareTo(MAX_SALARY) > 0) {
-            throw new IllegalStateException("New salary " + newSalary + " exceeds limit " + MAX_SALARY);
+            throw new BusinessException(ErrorCode.EMPLOYEE_SALARY_LIMIT, newSalary, MAX_SALARY);
         }
 
         employee.setSalary(newSalary);

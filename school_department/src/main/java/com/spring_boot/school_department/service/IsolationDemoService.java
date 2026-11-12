@@ -6,12 +6,13 @@ import com.spring_boot.school_department.dto.response.StudentResponse;
 import com.spring_boot.school_department.entity.Course;
 import com.spring_boot.school_department.entity.Employee;
 import com.spring_boot.school_department.entity.Student;
+import com.spring_boot.school_department.enums.ErrorCode;
+import com.spring_boot.school_department.exception.NotFoundException;
 import com.spring_boot.school_department.mapper.EmployeeMapper;
 import com.spring_boot.school_department.mapper.StudentMapper;
 import com.spring_boot.school_department.repository.CourseRepository;
 import com.spring_boot.school_department.repository.EmployeeRepository;
 import com.spring_boot.school_department.repository.StudentRepository;
-import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
@@ -85,7 +86,7 @@ public class IsolationDemoService {
     private EmployeeResponse raise(Long employeeId, BigDecimal amount, long delayMs) {
 
         Employee employee = employeeRepository.findById(employeeId)
-                .orElseThrow(() -> new EntityNotFoundException("Employee not found: " + employeeId));
+                .orElseThrow(() -> new NotFoundException(ErrorCode.EMPLOYEE_NOT_FOUND, employeeId));
 
         sleep(delayMs);
 
@@ -100,10 +101,10 @@ public class IsolationDemoService {
     private StudentResponse enroll(Long courseId, Long studentId, long delayMs) {
 
         Student student = studentRepository.findById(studentId)
-                .orElseThrow(() -> new EntityNotFoundException("Student not found: " + studentId));
+                .orElseThrow(() -> new NotFoundException(ErrorCode.STUDENT_NOT_FOUND, studentId));
 
         Course course = courseRepository.findById(courseId)
-                .orElseThrow(() -> new EntityNotFoundException("Course not found: " + courseId));
+                .orElseThrow(() -> new NotFoundException(ErrorCode.COURSE_NOT_FOUND, courseId));
 
         // bosh yeri check edib sonra sleep ile her ikisi eyni veziyyeti gorub write skew anomaliyasini yaradiriq
         enrollmentService.reserveSeat(courseId);

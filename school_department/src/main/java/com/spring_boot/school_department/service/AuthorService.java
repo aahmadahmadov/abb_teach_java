@@ -5,11 +5,13 @@ import com.spring_boot.school_department.dto.request.UpdateAuthorRequest;
 import com.spring_boot.school_department.dto.response.AuthorResponse;
 import com.spring_boot.school_department.dto.response.BookResponse;
 import com.spring_boot.school_department.entity.Author;
+import com.spring_boot.school_department.enums.ErrorCode;
+import com.spring_boot.school_department.exception.AlreadyExistsException;
+import com.spring_boot.school_department.exception.NotFoundException;
 import com.spring_boot.school_department.mapper.AuthorMapper;
 import com.spring_boot.school_department.mapper.BookMapper;
 import com.spring_boot.school_department.repository.AuthorRepository;
 import com.spring_boot.school_department.repository.BookRepository;
-import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -32,7 +34,7 @@ public class AuthorService {
     public AuthorResponse create(CreateAuthorRequest request) {
 
         if (authorRepository.existsByNameAndSurname(request.name(), request.surname())) {
-            throw new IllegalStateException("Author already exists: " + request.name() + " " + request.surname());
+            throw new AlreadyExistsException(ErrorCode.AUTHOR_ALREADY_EXISTS, request.name() + " " + request.surname());
         }
 
         Author author = authorMapper.toEntity(request);
@@ -69,7 +71,7 @@ public class AuthorService {
         Author author = findAuthor(id);
 
         if (authorRepository.existsByNameAndSurnameAndIdNot(request.name(), request.surname(), id)) {
-            throw new IllegalStateException("Author already exists: " + request.name() + " " + request.surname());
+            throw new AlreadyExistsException(ErrorCode.AUTHOR_ALREADY_EXISTS, request.name() + " " + request.surname());
         }
 
         authorMapper.updateEntity(request, author);
@@ -84,6 +86,6 @@ public class AuthorService {
 
     private Author findAuthor(Long id) {
         return authorRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Author not found: " + id));
+                .orElseThrow(() -> new NotFoundException(ErrorCode.AUTHOR_NOT_FOUND, id));
     }
 }

@@ -5,10 +5,13 @@ import com.spring_boot.school_department.dto.request.UpdateStudentRequest;
 import com.spring_boot.school_department.dto.response.StudentResponse;
 import com.spring_boot.school_department.entity.Course;
 import com.spring_boot.school_department.entity.Student;
+import com.spring_boot.school_department.enums.ErrorCode;
+import com.spring_boot.school_department.exception.AlreadyExistsException;
+import com.spring_boot.school_department.exception.BusinessException;
+import com.spring_boot.school_department.exception.NotFoundException;
 import com.spring_boot.school_department.mapper.StudentMapper;
 import com.spring_boot.school_department.repository.CourseRepository;
 import com.spring_boot.school_department.repository.StudentRepository;
-import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -38,7 +41,7 @@ public class StudentService {
 
     public StudentResponse getById(Long id) {
         Student student = studentRepository.findByIdWithCourses(id)
-                .orElseThrow(() -> new EntityNotFoundException("Student not found: " + id));
+                .orElseThrow(() -> new NotFoundException(ErrorCode.STUDENT_NOT_FOUND, id));
 
         return studentMapper.toDetailResponse(student);
     }
@@ -71,7 +74,7 @@ public class StudentService {
         Course course = findCourse(courseId);
 
         if (studentRepository.existsByIdAndCoursesId(studentId, courseId)) {
-            throw new IllegalStateException("Student already enrolled in course: " + courseId);
+            throw new AlreadyExistsException(ErrorCode.STUDENT_ALREADY_ENROLLED, courseId);
         }
 
         enrollmentService.reserveSeat(courseId);
@@ -87,7 +90,7 @@ public class StudentService {
         Course course = findCourse(courseId);
 
         if (!studentRepository.existsByIdAndCoursesId(studentId, courseId)) {
-            throw new IllegalStateException("Student is not enrolled in course: " + courseId);
+            throw new BusinessException(ErrorCode.STUDENT_NOT_ENROLLED, courseId);
         }
 
         student.removeCourse(course);
@@ -95,11 +98,11 @@ public class StudentService {
 
     private Student findStudent(Long id) {
         return studentRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Student not found: " + id));
+                .orElseThrow(() -> new NotFoundException(ErrorCode.STUDENT_NOT_FOUND, id));
     }
 
     private Course findCourse(Long id) {
         return courseRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Course not found: " + id));
+                .orElseThrow(() -> new NotFoundException(ErrorCode.COURSE_NOT_FOUND, id));
     }
 }

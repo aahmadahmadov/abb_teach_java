@@ -6,6 +6,8 @@ import com.spring_boot.school_department.entity.AuthorBook;
 import com.spring_boot.school_department.entity.Book;
 import com.spring_boot.school_department.entity.Course;
 import com.spring_boot.school_department.entity.Department;
+import com.spring_boot.school_department.enums.ErrorCode;
+import com.spring_boot.school_department.exception.NotFoundException;
 import com.spring_boot.school_department.mapper.CacheMapper;
 import jakarta.persistence.EntityManagerFactory;
 import lombok.RequiredArgsConstructor;
@@ -53,7 +55,7 @@ public class CacheService {
             case "authors" -> Author.class;
             case "books" -> Book.class;
             case "author-books" -> AuthorBook.class;
-            default -> throw new IllegalArgumentException("Unknown region: " + region);
+            default -> throw new NotFoundException(ErrorCode.CACHE_REGION_NOT_FOUND, region);
         };
 
         entityManagerFactory.getCache().evict(entityClass);

@@ -4,10 +4,13 @@ import com.spring_boot.school_department.dto.request.CreateDepartmentRequest;
 import com.spring_boot.school_department.dto.request.UpdateDepartmentRequest;
 import com.spring_boot.school_department.dto.response.DepartmentResponse;
 import com.spring_boot.school_department.entity.Department;
+import com.spring_boot.school_department.enums.ErrorCode;
+import com.spring_boot.school_department.exception.AlreadyExistsException;
+import com.spring_boot.school_department.exception.BusinessException;
+import com.spring_boot.school_department.exception.NotFoundException;
 import com.spring_boot.school_department.mapper.DepartmentMapper;
 import com.spring_boot.school_department.repository.DepartmentRepository;
 import com.spring_boot.school_department.repository.EmployeeRepository;
-import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -29,7 +32,7 @@ public class DepartmentService {
     public DepartmentResponse create(CreateDepartmentRequest request) {
 
         if (departmentRepository.existsByName(request.name())) {
-            throw new IllegalStateException("Department with name already exists: " + request.name());
+            throw new AlreadyExistsException(ErrorCode.DEPARTMENT_ALREADY_EXISTS, request.name());
         }
 
         Department department = departmentMapper.toEntity(request);
@@ -48,7 +51,7 @@ public class DepartmentService {
 
     public DepartmentResponse getById(Long id) {
         Department department = departmentRepository.findByIdWithEmployees(id)
-                .orElseThrow(() -> new EntityNotFoundException("Department not found with id: " + id));
+                .orElseThrow(() -> new NotFoundException(ErrorCode.DEPARTMENT_NOT_FOUND, id));
 
         return departmentMapper.toDetailResponse(department);
     }
@@ -58,7 +61,7 @@ public class DepartmentService {
         Department department = findDepartment(id);
 
         if (departmentRepository.existsByNameAndIdNot(request.name(), id)) {
-            throw new IllegalStateException("Department with name already exists: " + request.name());
+            throw new AlreadyExistsException(ErrorCode.DEPARTMENT_NAME_USED, request.name());
         }
 
         departmentMapper.updateEntity(request, department);
@@ -70,7 +73,7 @@ public class DepartmentService {
         Department department = findDepartment(id);
 
         if (employeeRepository.existsByDepartmentId(department.getId())) {
-            throw new IllegalStateException("Cannot delete department with employees: " + id);
+            throw new BusinessException(ErrorCode.DEPARTMENT_HAS_EMPLOYEES, id);
         }
 
         departmentRepository.delete(department);
@@ -78,7 +81,7 @@ public class DepartmentService {
 
     private Department findDepartment(Long id) {
         return departmentRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Department not found with id: " + id));
+                .orElseThrow(() -> new NotFoundException(ErrorCode.DEPARTMENT_NOT_FOUND, id));
     }
 
 }
