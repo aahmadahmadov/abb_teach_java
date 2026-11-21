@@ -12,6 +12,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -62,6 +63,7 @@ public class UserController {
     }
 
     @Operation(summary = "Istifadecini sil", description = "Pasportu ile birlikde silinir. Tapilmasa 404 (ERR-2600)")
+    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable Long id) {
@@ -82,6 +84,7 @@ public class UserController {
     }
 
     @Operation(summary = "Istifadecinin pasportunu sil", description = "Istifadeci tapilmasa 404 (ERR-2600), pasport yoxdursa 404 (ERR-2604)")
+    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/{id}/passport")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deletePassport(@PathVariable Long id) {

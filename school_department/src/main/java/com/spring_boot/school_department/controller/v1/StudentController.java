@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -57,6 +58,7 @@ public class StudentController {
     }
 
     @Operation(summary = "Telebeni sil", description = "Tapilmasa 404 (ERR-2000)")
+    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable Long id) {
@@ -71,6 +73,7 @@ public class StudentController {
     }
 
     @Operation(summary = "Telebeni kursdan cixar", description = "Telebe tapilmasa 404 (ERR-2000), kurs tapilmasa 404 (ERR-2100), kursa yazilmayibsa 409 (ERR-2002)")
+    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/{studentId}/courses/{courseId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void unenroll(@PathVariable Long studentId, @PathVariable Long courseId) {

@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -24,6 +25,7 @@ public class CacheController {
     }
 
     @Operation(summary = "Butun cache-i temizle", description = "Butun region-lari bosaldir")
+    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void evictAll() {
@@ -31,6 +33,7 @@ public class CacheController {
     }
 
     @Operation(summary = "Statistikani sifirla", description = "Hit/miss saylarini sifirlayir")
+    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/stats")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void clearStats() {
@@ -38,6 +41,7 @@ public class CacheController {
     }
 
     @Operation(summary = "Bir region-u temizle", description = "Region tapilmasa 404 (ERR-1011)")
+    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/{region}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void evictRegion(@PathVariable String region) {
