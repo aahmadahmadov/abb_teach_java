@@ -3,6 +3,7 @@ package com.spring_boot.school_department.config;
 import com.spring_boot.school_department.dto.response.ErrorResponse;
 import com.spring_boot.school_department.enums.ErrorCode;
 import io.swagger.v3.core.converter.ModelConverters;
+import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.media.Content;
@@ -12,6 +13,8 @@ import io.swagger.v3.oas.models.media.StringSchema;
 import io.swagger.v3.oas.models.parameters.HeaderParameter;
 import io.swagger.v3.oas.models.responses.ApiResponse;
 import io.swagger.v3.oas.models.responses.ApiResponses;
+import io.swagger.v3.oas.models.security.SecurityRequirement;
+import io.swagger.v3.oas.models.security.SecurityScheme;
 import org.springdoc.core.customizers.OpenApiCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -21,6 +24,8 @@ import java.util.List;
 @Configuration
 public class OpenApiConfig {
 
+    public static final String BEARER_AUTH = "bearerAuth";
+
     @Bean
     public OpenAPI schoolOpenApi() {
         return new OpenAPI()
@@ -29,7 +34,13 @@ public class OpenApiConfig {
                         .version("v1")
                         .description("Student, Course, Department, Employee, Author, Book ve User/Passport API.\n\n"
                                 + "Dil `?lang=` parametri ve ya `Accept-Language` header-i ile secilir (az / eng / rus).\n\n"
-                                + errorCodeTable()));
+                                + errorCodeTable()))
+                .components(new Components().addSecuritySchemes(BEARER_AUTH,
+                        new SecurityScheme()
+                                .type(SecurityScheme.Type.HTTP)
+                                .scheme("bearer")
+                                .bearerFormat("JWT")))
+                .addSecurityItem(new SecurityRequirement().addList(BEARER_AUTH));
     }
 
     @Bean
@@ -53,6 +64,13 @@ public class OpenApiConfig {
                 responses.addApiResponse("404", errorResponse("Tapilmadi"));
                 responses.addApiResponse("409", errorResponse("Konflikt"));
                 responses.addApiResponse("500", errorResponse("Daxili server xetasi"));
+
+                boolean isPublic = operation.getSecurity() != null && operation.getSecurity().isEmpty();
+
+                if (!isPublic) {
+                    responses.addApiResponse("401", errorResponse("Token yoxdur, etibarsizdir ve ya muddeti bitib"));
+                    responses.addApiResponse("403", errorResponse("Bu emeliyyat ucun icaze yoxdur"));
+                }
             }));
         };
     }

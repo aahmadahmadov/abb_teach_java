@@ -10,6 +10,7 @@ import com.spring_boot.school_department.dto.response.SessionResponse;
 import com.spring_boot.school_department.security.AuthPrincipal;
 import com.spring_boot.school_department.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +29,7 @@ public class AuthController {
     private final AuthService authService;
 
     @Operation(summary = "Qeydiyyat", description = "Hemise USER rolu ile yaradilir. Validasiya xetasinda 400 (ERR-1000), username varsa 409 (ERR-2711), email varsa 409 (ERR-2712)")
+    @SecurityRequirements()
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
     public AccountResponse register(@Valid @RequestBody RegisterRequest request) {
@@ -35,6 +37,7 @@ public class AuthController {
     }
 
     @Operation(summary = "Login", description = "Access ve refresh token qaytarir. Login ve ya sifre sehvdirse 401 (ERR-2701), hesab sondurulubse 403 (ERR-2708)")
+    @SecurityRequirements()
     @PostMapping("/login")
     @ResponseStatus(HttpStatus.OK)
     public AuthResponse login(@Valid @RequestBody LoginRequest request) {
@@ -42,6 +45,7 @@ public class AuthController {
     }
 
     @Operation(summary = "Token yenile", description = "Eyni sessiya ucun yeni cut qaytarir. Muddeti bitibse 401 (ERR-2702), etibarsizdirsa 401 (ERR-2703), legv olunubsa 401 (ERR-2704), access token gonderilibse 401 (ERR-2705), tekrar istifade olunubsa 401 (ERR-2706), hesab sondurulubse 403 (ERR-2708)")
+    @SecurityRequirements()
     @PostMapping("/refresh")
     @ResponseStatus(HttpStatus.OK)
     public AuthResponse refresh(@Valid @RequestBody RefreshRequest request) {
