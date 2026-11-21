@@ -64,8 +64,23 @@ public enum ErrorCode {
     PASSPORT_SERIAL_EXISTS("ERR-2605", "error.passport.serialExists", HttpStatus.CONFLICT),
 
     // ===== Auth / Account: 2700-2799 =====
+    AUTH_UNAUTHORIZED("ERR-2700", "error.auth.unauthorized", HttpStatus.UNAUTHORIZED),
+    AUTH_BAD_CREDENTIALS("ERR-2701", "error.auth.badCredentials", HttpStatus.UNAUTHORIZED),
+    AUTH_TOKEN_EXPIRED("ERR-2702", "error.auth.tokenExpired", HttpStatus.UNAUTHORIZED),
+    AUTH_TOKEN_INVALID("ERR-2703", "error.auth.tokenInvalid", HttpStatus.UNAUTHORIZED),
+    AUTH_TOKEN_REVOKED("ERR-2704", "error.auth.tokenRevoked", HttpStatus.UNAUTHORIZED),
+    AUTH_TOKEN_TYPE_MISMATCH("ERR-2705", "error.auth.tokenTypeMismatch", HttpStatus.UNAUTHORIZED),
+    AUTH_REFRESH_REUSED("ERR-2706", "error.auth.refreshReused", HttpStatus.UNAUTHORIZED),
+    AUTH_ACCESS_DENIED("ERR-2707", "error.auth.accessDenied", HttpStatus.FORBIDDEN),
+    AUTH_ACCOUNT_DISABLED("ERR-2708", "error.auth.accountDisabled", HttpStatus.FORBIDDEN),
+    AUTH_ACCOUNT_LOCKED("ERR-2709", "error.auth.accountLocked", HttpStatus.LOCKED),
+    ACCOUNT_NOT_FOUND("ERR-2710", "error.account.notFound", HttpStatus.NOT_FOUND),
     ACCOUNT_USERNAME_EXISTS("ERR-2711", "error.account.usernameExists", HttpStatus.CONFLICT),
-    ACCOUNT_EMAIL_EXISTS("ERR-2712", "error.account.emailExists", HttpStatus.CONFLICT);
+    ACCOUNT_EMAIL_EXISTS("ERR-2712", "error.account.emailExists", HttpStatus.CONFLICT),
+    AUTH_OLD_PASSWORD_WRONG("ERR-2713", "error.auth.oldPasswordWrong", HttpStatus.BAD_REQUEST),
+    AUTH_PASSWORD_SAME("ERR-2714", "error.auth.passwordSame", HttpStatus.BAD_REQUEST),
+    ACCOUNT_SELF_MODIFICATION("ERR-2715", "error.account.selfModification", HttpStatus.CONFLICT),
+    SESSION_NOT_FOUND("ERR-2716", "error.auth.sessionNotFound", HttpStatus.NOT_FOUND);
 
     private final String code;
     private final String messageKey;

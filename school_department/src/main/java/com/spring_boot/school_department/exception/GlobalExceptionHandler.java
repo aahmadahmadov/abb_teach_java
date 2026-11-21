@@ -7,12 +7,14 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.context.MessageSource;
-import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -20,6 +22,7 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.LocaleResolver;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.time.LocalDateTime;
@@ -33,6 +36,7 @@ import java.util.Map;
 public class GlobalExceptionHandler {
 
     private final MessageSource messageSource;
+    private final LocaleResolver localeResolver;
 
     // Base exceptiondan extend eden butun exceptionlar hamisi burdan kecir
     @ExceptionHandler(BaseException.class)
@@ -93,6 +97,21 @@ public class GlobalExceptionHandler {
         return build(request, ex, ErrorCode.TRANSACTION_REQUIRED, null);
     }
 
+    @ExceptionHandler(BadCredentialsException.class)
+    public ResponseEntity<ErrorResponse> handleBadCredentials(BadCredentialsException ex, HttpServletRequest request) {
+        return build(request, ex, ErrorCode.AUTH_BAD_CREDENTIALS, null);
+    }
+
+    @ExceptionHandler(DisabledException.class)
+    public ResponseEntity<ErrorResponse> handleDisabled(DisabledException ex, HttpServletRequest request) {
+        return build(request, ex, ErrorCode.AUTH_ACCOUNT_DISABLED, null);
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException ex, HttpServletRequest request) {
+        return build(request, ex, ErrorCode.AUTH_ACCESS_DENIED, null);
+    }
+
     // detallari yalniz loga yaziriq, cavaba yox
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleOther(Exception ex, HttpServletRequest request) {
@@ -107,14 +126,13 @@ public class GlobalExceptionHandler {
         logError(request, ex, errorCode, errors, args);
 
         String key = errorCode.getMessageKey();
-        String message = messageSource.getMessage(key, args, key, LocaleContextHolder.getLocale());
+        String message = messageSource.getMessage(key, args, key, localeResolver.resolveLocale(request));
 
         return ResponseEntity
                 .status(status)
                 .body(new ErrorResponse(status.value(), errorCode.getCode(), message, errors != null ? errors : Map.of(), MDC.get("traceId"), LocalDateTime.now()));
     }
 
-    // 4xx WARN ile stack trace-siz, 5xx ERROR ile stack trace ile
     private void logError(HttpServletRequest request,
                           Exception ex,
                           ErrorCode errorCode,
