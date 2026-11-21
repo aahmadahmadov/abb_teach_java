@@ -31,6 +31,9 @@ public class SecurityConfig {
             "/error"
     };
 
+    private final RestAuthenticationEntryPoint entryPoint;
+    private final RestAccessDeniedHandler accessDeniedHandler;
+
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         // csrf hucumu brauzerin cookie-ni avtomatik gondermesine esasen bash verir
@@ -42,6 +45,9 @@ public class SecurityConfig {
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .sessionManagement(s -> s
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .exceptionHandling(e -> e
+                        .authenticationEntryPoint(entryPoint)
+                        .accessDeniedHandler(accessDeniedHandler))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(PUBLIC_URLS).permitAll()
                         .requestMatchers("/api/admin/**").hasRole(Role.ADMIN.name())
