@@ -5,14 +5,18 @@ import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.annotation.Pointcut;
+import org.aspectj.lang.reflect.MethodSignature;
 import org.springframework.stereotype.Component;
 
 import java.util.Arrays;
+import java.util.Set;
 
 @Slf4j
 @Aspect
 @Component
 public class LoggingAspect {
+
+    private static final Set<String> SECRET_PARAMS = Set.of("password", "oldPassword", "newPassword", "refreshToken", "accessToken");
 
     @Pointcut("within(com.spring_boot.school_department.controller..*)")
     public void controllerLayer() {
@@ -29,7 +33,7 @@ public class LoggingAspect {
 
         boolean controller = pjp.getSignature().getDeclaringTypeName().contains(".controller.");
 
-        write(controller, "--> " + method + " args=" + Arrays.toString(pjp.getArgs()));
+        write(controller, "--> " + method + " args=" + Arrays.toString(maskSecrets(pjp)));
 
         long start = System.currentTimeMillis();
 
@@ -48,6 +52,20 @@ public class LoggingAspect {
             // global exception handler tutacaq tekrar
             throw ex;
         }
+    }
+
+    private Object[] maskSecrets(ProceedingJoinPoint pjp) {
+
+        String[] names = ((MethodSignature) pjp.getSignature()).getParameterNames();
+        Object[] args = pjp.getArgs().clone();
+
+        for (int i = 0; i < args.length; i++) {
+            if (names != null && SECRET_PARAMS.contains(names[i])) {
+                args[i] = "***";
+            }
+        }
+
+        return args;
     }
 
     private void write(boolean controller, String message) {
