@@ -61,7 +61,11 @@ public enum ErrorCode {
     USER_EMAIL_USED("ERR-2602", "error.user.emailUsed", HttpStatus.CONFLICT),
     USER_PASSPORT_EXISTS("ERR-2603", "error.user.passportExists", HttpStatus.CONFLICT),
     PASSPORT_NOT_FOUND("ERR-2604", "error.passport.notFound", HttpStatus.NOT_FOUND),
-    PASSPORT_SERIAL_EXISTS("ERR-2605", "error.passport.serialExists", HttpStatus.CONFLICT);
+    PASSPORT_SERIAL_EXISTS("ERR-2605", "error.passport.serialExists", HttpStatus.CONFLICT),
+
+    // ===== Auth / Account: 2700-2799 =====
+    ACCOUNT_USERNAME_EXISTS("ERR-2711", "error.account.usernameExists", HttpStatus.CONFLICT),
+    ACCOUNT_EMAIL_EXISTS("ERR-2712", "error.account.emailExists", HttpStatus.CONFLICT);
 
     private final String code;
     private final String messageKey;

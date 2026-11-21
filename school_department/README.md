@@ -20,6 +20,28 @@ docker compose up -d
 
 Base URL: `http://localhost:8080/test-demo`
 
+### Mühit dəyişənləri
+
+`JWT_SECRET` və `ADMIN_PASSWORD` repoda yazılmır, `application.yaml` onları mühit dəyişənlərindən oxuyur (`${JWT_SECRET}`, `${ADMIN_PASSWORD}`). Verilməsə tətbiq işə düşmür.
+
+- `JWT_SECRET`: tokenləri imzalayan Base64 açar, ən az 256 bit (32 bayt).
+- `ADMIN_PASSWORD`: ilk dəfə yaradılan `admin` hesabının şifrəsi.
+
+Secret yaratmaq:
+
+```bash
+openssl rand -base64 32
+```
+
+`./gradlew bootRun`-dan əvvəl:
+
+```bash
+export JWT_SECRET='<openssl-in-verdiyi-dəyər>'
+export ADMIN_PASSWORD='<öz-şifrəniz>'
+```
+
+Bu `export` sətirlərini `.env` faylında saxlayıb `source .env` ilə yükləmək də olar. `.env` `.gitignore`-dadır və repoya düşmür.
+
 ## API Docs
 
 - Swagger UI: http://localhost:8080/test-demo/swagger-ui/index.html
