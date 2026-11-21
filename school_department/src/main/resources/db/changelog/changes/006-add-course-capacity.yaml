@@ -1,0 +1,24 @@
+databaseChangeLog:
+  - changeSet:
+      id: 006-1
+      author: Ahmad Ahmadov
+      changes:
+        - addColumn:
+            tableName: courses
+            columns:
+              - column:
+                  name: capacity
+                  type: INTEGER
+                  defaultValueNumeric: 30
+                  constraints:
+                    nullable: false
+
+  - changeSet:
+      id: 006-2
+      author: Ahmad Ahmadov
+      changes:
+        - sql:
+            sql: ALTER TABLE courses ADD CONSTRAINT chk_course_capacity CHECK (capacity > 0)
+      rollback:
+        - sql:
+            sql: ALTER TABLE courses DROP CONSTRAINT chk_course_capacity

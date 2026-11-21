@@ -1,0 +1,70 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /test-demo
+
+spring:
+  application:
+    name: school-management
+  datasource:
+    url: jdbc:postgresql://localhost:5432/school_db
+    username: postgres
+    password: postgres
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+        generate_statistics: true
+        cache:
+          use_second_level_cache: true
+          use_query_cache: true
+          region:
+            factory_class: jcache
+        javax:
+          cache:
+            provider: org.ehcache.jsr107.EhcacheCachingProvider
+            uri: classpath:ehcache.xml
+  messages:
+    basename: i18n/messages
+    encoding: UTF-8
+    fallback-to-system-locale: false
+  liquibase:
+    enabled: true
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+    contexts: dev
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    try-it-out-enabled: true
+
+app:
+  jwt:
+    secret: ${JWT_SECRET}
+    issuer: school-api
+    access-token-ttl: 15m
+    refresh-token-ttl: 7d
+  security:
+    token-cleanup-cron: "0 0 * * * *"   # her saat
+    admin:
+      username: admin
+      email: admin@school.az
+      password: ${ADMIN_PASSWORD}
+
+logging:
+  pattern:
+    level: "%5p [%X{traceId:-}] [%X{username:-anonymous}]"
+  file:
+    name: logs/app.log
+  level:
+    com.spring_boot.school_department.logging: debug
+    org.hibernate.cache: debug
+    org.springframework.orm.jpa.JpaTransactionManager: debug
+    org.springframework.transaction: trace
