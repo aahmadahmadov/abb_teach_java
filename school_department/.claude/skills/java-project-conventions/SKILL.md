@@ -57,7 +57,18 @@ If the spec shows a literal that is really a fixed set of values (roles, token t
 - Short methods, early `throw`, private `findX(id)` helpers like in `UserService`.
 - No streams gymnastics, no generics tricks, no extra interfaces, no builders the codebase does not already use. Prefer the textbook version.
 - Do not touch files the task does not mention. Do not refactor existing code "while you are there".
-- No unit test files, even if a spec asks for them. Verification is done by running the app.
+- No unit test files unless the user explicitly asks for them in the current task. Otherwise verification is done by running the app.
+
+## Unit tests (only when the user asks)
+
+- JUnit 5 + Mockito + AssertJ (from the Spring Boot test starters). No Spring context: `@ExtendWith(MockitoExtension.class)`, `@Mock` for repositories/mappers/other services, `@InjectMocks` for the service under test.
+- One test class per service, same package under `src/test/java`, named `<Service>Test`.
+- Test method names: `methodName_condition_expectedResult` in camelCase parts, e.g. `create_emailExists_throwsAlreadyExists`.
+- Body in three blocks separated by a blank line: arrange (`when(...).thenReturn(...)`), act, assert (`assertThat`, `assertThatThrownBy(...).isInstanceOf(...)`, check the `ErrorCode` via `extracting("errorCode")`, `verify(...)`).
+- Build test data with plain `new Entity()` + setters, no builders or fixtures frameworks. Small private helper methods are fine.
+- Cover every branch: each `if`, each thrown error, each `orElseThrow`, empty vs non-empty lists.
+- No comments in tests unless the why is not obvious.
+- Coverage is measured with JaCoCo (`./gradlew test jacocoTestReport`, report in `build/reports/jacoco/test/html`).
 
 ## Comments
 

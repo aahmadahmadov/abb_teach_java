@@ -14,6 +14,8 @@ Spring Boot + Spring Data JPA ilə entity əlaqələri (OneToOne, OneToMany, Man
 - Bean Validation, xəta mesajları i18n bundle-larda (az, en, ru)
 - Lombok, MapStruct 1.6.3
 - springdoc-openapi 3.2.0 (Swagger UI)
+- Unit testlər: JUnit 5, Mockito, AssertJ
+- JaCoCo 0.8.16 (test coverage)
 
 ## İşə salma
 
@@ -280,6 +282,55 @@ Trace ID: sorğuda `X-Trace-Id` header-i göndərilsə (8-64 simvol, hərf, rəq
 Collection: [`postman/school-api.postman_collection.json`](postman/school-api.postman_collection.json)
 
 Postman-da **Import** edin. `baseUrl` dəyişəni `http://localhost:8080/test-demo` olaraq təyin olunub.
+
+## Unit testlər
+
+`service` paketindəki hər class unit testlə yoxlanır: JUnit 5 + Mockito + AssertJ. Spring context və baza qalxmır, repository-lər, mapper-lər və digər service-lər mock olunur.
+
+| Service | Test class |
+| --- | --- |
+| `AccountService` | `AccountServiceTest` |
+| `AuditLogService` | `AuditLogServiceTest` |
+| `AuthService` | `AuthServiceTest` |
+| `AuthorService` | `AuthorServiceTest` |
+| `BookService` | `BookServiceTest` |
+| `CacheService` | `CacheServiceTest` |
+| `CourseService` | `CourseServiceTest` |
+| `DepartmentService` | `DepartmentServiceTest` |
+| `EmployeeService` | `EmployeeServiceTest` |
+| `EnrollmentService` | `EnrollmentServiceTest` |
+| `IsolationDemoService` | `IsolationDemoServiceTest` |
+| `SalaryService` | `SalaryServiceTest` |
+| `StudentService` | `StudentServiceTest` |
+| `TokenBlacklistService` | `TokenBlacklistServiceTest` |
+| `TokenService` | `TokenServiceTest` |
+| `UserService` | `UserServiceTest` |
+
+Testlər `src/test/java/com/spring_boot/school_department/service/`-dədir.
+
+Yalnız service testləri (baza və mühit dəyişənləri lazım deyil):
+
+```bash
+./gradlew test --tests 'com.spring_boot.school_department.service.*'
+```
+
+Bütün testlər, `SchoolDepartmentApplicationTests` də daxil. Bu test tam context qaldırır, ona görə baza və [mühit dəyişənləri](#mühit-dəyişənləri) lazımdır:
+
+```bash
+docker compose up -d
+export JWT_SECRET='<openssl-in-verdiyi-dəyər>'
+export ADMIN_PASSWORD='<öz-şifrəniz>'
+./gradlew test
+```
+
+### Coverage (JaCoCo)
+
+```bash
+./gradlew test jacocoTestReport jacocoTestCoverageVerification
+```
+
+- HTML hesabat: `build/reports/jacoco/test/html/index.html`
+- `jacocoTestCoverageVerification` `service` paketinin line və ya branch coverage-i 100%-dən aşağı düşsə build-i dayandırır.
 
 ## Liquibase
 
