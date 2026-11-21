@@ -17,7 +17,10 @@ public enum ValidationMessage {
     NOT_NEGATIVE(Keys.NOT_NEGATIVE),
     DIGITS(Keys.DIGITS),
     PAST_OR_PRESENT(Keys.PAST_OR_PRESENT),
-    SERIAL_NUMBER_PATTERN(Keys.SERIAL_NUMBER_PATTERN);
+    SERIAL_NUMBER_PATTERN(Keys.SERIAL_NUMBER_PATTERN),
+    SIZE_RANGE(Keys.SIZE_RANGE),
+    USERNAME_PATTERN(Keys.USERNAME_PATTERN),
+    PASSWORD_STRONG(Keys.PASSWORD_STRONG);
 
     private final String key;
 
@@ -34,6 +37,9 @@ public enum ValidationMessage {
         public static final String DIGITS = "{validation.digits}";
         public static final String PAST_OR_PRESENT = "{validation.pastOrPresent}";
         public static final String SERIAL_NUMBER_PATTERN = "{validation.serialNumber.pattern}";
+        public static final String SIZE_RANGE = "{validation.size.range}";
+        public static final String USERNAME_PATTERN = "{validation.username.pattern}";
+        public static final String PASSWORD_STRONG = "{validation.password.strong}";
 
         private Keys() {
         }

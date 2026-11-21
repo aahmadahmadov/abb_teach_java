@@ -45,9 +45,22 @@ springdoc:
     operations-sorter: method
     try-it-out-enabled: true
 
+app:
+  jwt:
+    secret: ${JWT_SECRET}
+    issuer: school-api
+    access-token-ttl: 15m
+    refresh-token-ttl: 7d
+  security:
+    token-cleanup-cron: "0 0 * * * *"   # her saat
+    admin:
+      username: admin
+      email: admin@school.az
+      password: ${ADMIN_PASSWORD}
+
 logging:
   pattern:
-    level: "%5p [%X{traceId:-}]"
+    level: "%5p [%X{traceId:-}] [%X{username:-anonymous}]"
   file:
     name: logs/app.log
   level:
