@@ -1,7 +1,9 @@
 package com.spring_boot.school_department.security;
 
 import com.spring_boot.school_department.enums.Role;
+import com.spring_boot.school_department.security.jwt.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -14,6 +16,7 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 @Configuration
 @EnableWebSecurity
@@ -31,6 +34,7 @@ public class SecurityConfig {
             "/error"
     };
 
+    private final JwtAuthenticationFilter jwtFilter;
     private final RestAuthenticationEntryPoint entryPoint;
     private final RestAccessDeniedHandler accessDeniedHandler;
 
@@ -51,8 +55,18 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(PUBLIC_URLS).permitAll()
                         .requestMatchers("/api/admin/**").hasRole(Role.ADMIN.name())
-                        .anyRequest().authenticated());
+                        .anyRequest().authenticated())
+                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
+    }
+
+    @Bean
+    public FilterRegistrationBean<JwtAuthenticationFilter> jwtFilterRegistration(JwtAuthenticationFilter filter) {
+        var reg = new FilterRegistrationBean<>(filter);
+
+        reg.setEnabled(false);
+
+        return reg;
     }
 
     @Bean
