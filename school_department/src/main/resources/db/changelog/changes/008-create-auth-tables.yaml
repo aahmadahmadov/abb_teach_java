@@ -66,3 +66,167 @@ databaseChangeLog:
       rollback:
         - sql:
             sql: ALTER TABLE accounts DROP CONSTRAINT chk_accounts_role
+
+  - changeSet:
+      id: 008-3
+      author: Ahmad Ahmadov
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: auth_tokens
+      changes:
+        - createTable:
+            tableName: auth_tokens
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_auth_tokens
+              - column:
+                  name: jti
+                  type: VARCHAR(36)
+                  constraints:
+                    nullable: false
+                    unique: true
+                    uniqueConstraintName: uk_auth_token_jti
+              - column:
+                  name: session_id
+                  type: VARCHAR(36)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: token_type
+                  type: VARCHAR(10)
+              - column:
+                  name: account_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: issued_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: expires_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: revoked
+                  type: BOOLEAN
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+              - column:
+                  name: revoked_at
+                  type: TIMESTAMP WITH TIME ZONE
+              - column:
+                  name: revoke_reason
+                  type: VARCHAR(30)
+
+  - changeSet:
+      id: 008-4
+      author: Ahmad Ahmadov
+      changes:
+        - addForeignKeyConstraint:
+            constraintName: fk_auth_token_account
+            baseTableName: auth_tokens
+            baseColumnNames: account_id
+            referencedTableName: accounts
+            referencedColumnNames: id
+
+  - changeSet:
+      id: 008-5
+      author: Ahmad Ahmadov
+      changes:
+        - createIndex:
+            indexName: idx_auth_token_session
+            tableName: auth_tokens
+            columns:
+              - column:
+                  name: session_id
+        - createIndex:
+            indexName: idx_auth_token_account_revoked
+            tableName: auth_tokens
+            columns:
+              - column:
+                  name: account_id
+              - column:
+                  name: revoked
+
+  - changeSet:
+      id: 008-6
+      author: Ahmad Ahmadov
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: token_blacklist
+      changes:
+        - createTable:
+            tableName: token_blacklist
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_token_blacklist
+              - column:
+                  name: jti
+                  type: VARCHAR(36)
+                  constraints:
+                    nullable: false
+                    unique: true
+                    uniqueConstraintName: uk_blacklist_jti
+              - column:
+                  name: account_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: token_type
+                  type: VARCHAR(10)
+              - column:
+                  name: reason
+                  type: VARCHAR(30)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: expires_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: blacklisted_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+
+  - changeSet:
+      id: 008-7
+      author: Ahmad Ahmadov
+      changes:
+        - addForeignKeyConstraint:
+            constraintName: fk_blacklist_account
+            baseTableName: token_blacklist
+            baseColumnNames: account_id
+            referencedTableName: accounts
+            referencedColumnNames: id
+
+  - changeSet:
+      id: 008-8
+      author: Ahmad Ahmadov
+      changes:
+        - createIndex:
+            indexName: idx_blacklist_expires_at
+            tableName: token_blacklist
+            columns:
+              - column:
+                  name: expires_at
