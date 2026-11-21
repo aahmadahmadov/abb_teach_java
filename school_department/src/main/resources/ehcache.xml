@@ -1,0 +1,70 @@
+<config xmlns="http://www.ehcache.org/v3">
+
+    <!-- entity-lər -->
+    <cache alias="departments">
+        <expiry>
+            <ttl unit="minutes">10</ttl>
+        </expiry>
+        <heap unit="entries">1000</heap>
+    </cache>
+
+    <cache alias="courses">
+        <expiry>
+            <ttl unit="minutes">10</ttl>
+        </expiry>
+        <heap unit="entries">1000</heap>
+    </cache>
+
+    <cache alias="authors">
+        <expiry>
+            <ttl unit="minutes">10</ttl>
+        </expiry>
+        <heap unit="entries">1000</heap>
+    </cache>
+
+    <cache alias="books">
+        <expiry>
+            <ttl unit="minutes">2</ttl>
+        </expiry>
+        <heap unit="entries">1000</heap>
+    </cache>
+
+    <cache alias="author-books">
+        <expiry>
+            <ttl unit="minutes">10</ttl>
+        </expiry>
+        <heap unit="entries">1000</heap>
+    </cache>
+
+    <!-- collection-lar -->
+    <cache alias="author-authorBooks">
+        <expiry>
+            <ttl unit="minutes">10</ttl>
+        </expiry>
+        <heap unit="entries">1000</heap>
+    </cache>
+
+    <cache alias="book-authorBooks">
+        <expiry>
+            <ttl unit="minutes">10</ttl>
+        </expiry>
+        <heap unit="entries">1000</heap>
+    </cache>
+
+    <!-- query cache -->
+    <cache alias="default-query-results-region">
+        <expiry>
+            <ttl unit="minutes">10</ttl>
+        </expiry>
+        <heap unit="entries">1000</heap>
+    </cache>
+
+    <!-- cədvəllərin son dəyişmə vaxtı burda saxlanır, ona görə ttl qoymadım -->
+    <cache alias="default-update-timestamps-region">
+        <expiry>
+            <none/>
+        </expiry>
+        <heap unit="entries">1000</heap>
+    </cache>
+
+</config>

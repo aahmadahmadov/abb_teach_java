@@ -1,0 +1,78 @@
+databaseChangeLog:
+  - changeSet:
+      id: 100-1
+      author: Ahmad Ahmadov
+      context: dev
+      changes:
+        - loadData:
+            tableName: departments
+            file: db/changelog/data/departments.csv
+            separator: ','
+      rollback:
+        - sql:
+            sql: TRUNCATE TABLE departments RESTART IDENTITY CASCADE
+
+  - changeSet:
+      id: 100-2
+      author: Ahmad Ahmadov
+      context: dev
+      changes:
+        - loadData:
+            tableName: employees
+            file: db/changelog/data/employees.csv
+            separator: ','
+      rollback:
+        - sql:
+            sql: TRUNCATE TABLE employees RESTART IDENTITY CASCADE
+
+  - changeSet:
+      id: 100-3
+      author: Ahmad Ahmadov
+      context: dev
+      changes:
+        - loadData:
+            tableName: courses
+            file: db/changelog/data/courses.csv
+            separator: ','
+      rollback:
+        - sql:
+            sql: TRUNCATE TABLE courses RESTART IDENTITY CASCADE
+
+  - changeSet:
+      id: 100-4
+      author: Ahmad Ahmadov
+      context: dev
+      changes:
+        - loadData:
+            tableName: students
+            file: db/changelog/data/students.csv
+            separator: ','
+      rollback:
+        - sql:
+            sql: TRUNCATE TABLE students RESTART IDENTITY CASCADE
+
+  - changeSet:
+      id: 100-5
+      author: Ahmad Ahmadov
+      context: dev
+      changes:
+        - loadData:
+            tableName: authors
+            file: db/changelog/data/authors.csv
+            separator: ','
+      rollback:
+        - sql:
+            sql: TRUNCATE TABLE authors RESTART IDENTITY CASCADE
+
+  - changeSet:
+      id: 100-6
+      author: Ahmad Ahmadov
+      context: dev
+      changes:
+        - loadData:
+            tableName: books
+            file: db/changelog/data/books.csv
+            separator: ','
+      rollback:
+        - sql:
+            sql: TRUNCATE TABLE books RESTART IDENTITY CASCADE

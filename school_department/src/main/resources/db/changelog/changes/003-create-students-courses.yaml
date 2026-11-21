@@ -1,0 +1,162 @@
+databaseChangeLog:
+  - changeSet:
+      id: 003-1
+      author: Ahmad Ahmadov
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: students
+      changes:
+        - createTable:
+            tableName: students
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_students
+              - column:
+                  name: name
+                  type: VARCHAR(50)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: surname
+                  type: VARCHAR(50)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: age
+                  type: INTEGER
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+              - column:
+                  name: version_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+
+  - changeSet:
+      id: 003-2
+      author: Ahmad Ahmadov
+      changes:
+        - sql:
+            sql: ALTER TABLE students ADD CONSTRAINT age_check CHECK (age > 0 AND age < 120)
+      rollback:
+        - sql:
+            sql: ALTER TABLE students DROP CONSTRAINT age_check
+
+  - changeSet:
+      id: 003-3
+      author: Ahmad Ahmadov
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: courses
+      changes:
+        - createTable:
+            tableName: courses
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_courses
+              - column:
+                  name: title
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+                    unique: true
+                    uniqueConstraintName: uk_course_title
+              - column:
+                  name: credit
+                  type: INTEGER
+                  constraints:
+                    nullable: false
+              - column:
+                  name: teacher
+                  type: VARCHAR(50)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+              - column:
+                  name: version_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+
+  - changeSet:
+      id: 003-4
+      author: Ahmad Ahmadov
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: student_course
+      changes:
+        - createTable:
+            tableName: student_course
+            columns:
+              - column:
+                  name: student_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: course_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+
+  - changeSet:
+      id: 003-5
+      author: Ahmad Ahmadov
+      changes:
+        - addUniqueConstraint:
+            constraintName: uk_student_course
+            tableName: student_course
+            columnNames: student_id, course_id
+
+  - changeSet:
+      id: 003-6
+      author: Ahmad Ahmadov
+      changes:
+        - addForeignKeyConstraint:
+            constraintName: fk_sc_student
+            baseTableName: student_course
+            baseColumnNames: student_id
+            referencedTableName: students
+            referencedColumnNames: id
+
+  - changeSet:
+      id: 003-7
+      author: Ahmad Ahmadov
+      changes:
+        - addForeignKeyConstraint:
+            constraintName: fk_sc_course
+            baseTableName: student_course
+            baseColumnNames: course_id
+            referencedTableName: courses
+            referencedColumnNames: id
