@@ -8,6 +8,7 @@ import com.spring_boot.school_department.exception.ForbiddenException;
 import com.spring_boot.school_department.exception.UnauthorizedException;
 import com.spring_boot.school_department.repository.AccountRepository;
 import com.spring_boot.school_department.security.AuthPrincipal;
+import com.spring_boot.school_department.service.TokenBlacklistService;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
@@ -37,15 +38,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private static final String MDC_USERNAME = "username";
 
     private final JwtService jwtService;
+    private final TokenBlacklistService blacklistService;
     private final AccountRepository accountRepository;
     private final HandlerExceptionResolver resolver;
 
     public JwtAuthenticationFilter(JwtService jwtService,
+                                   TokenBlacklistService blacklistService,
                                    AccountRepository accountRepository,
                                    @Qualifier("handlerExceptionResolver")
                                    HandlerExceptionResolver resolver) {
 
         this.jwtService = jwtService;
+        this.blacklistService = blacklistService;
         this.accountRepository = accountRepository;
         this.resolver = resolver;
     }
@@ -67,6 +71,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             if (!TokenType.ACCESS.name().equals(type)) {
                 throw new UnauthorizedException(ErrorCode.AUTH_TOKEN_TYPE_MISMATCH);
+            }
+
+            if (blacklistService.isBlacklisted(claims.getId())) {
+                throw new UnauthorizedException(ErrorCode.AUTH_TOKEN_REVOKED);
             }
 
             Account account = accountRepository.findByUsername(claims.getSubject())
