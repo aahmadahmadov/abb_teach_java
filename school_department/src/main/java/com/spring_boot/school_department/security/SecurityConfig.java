@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -34,6 +35,13 @@ public class SecurityConfig {
             "/error"
     };
 
+    private static final String[] MANAGER_EDITABLE_URLS = {
+            "/api/students/**",
+            "/api/courses/**",
+            "/api/authors/**",
+            "/api/books/**"
+    };
+
     private final JwtAuthenticationFilter jwtFilter;
     private final RestAuthenticationEntryPoint entryPoint;
     private final RestAccessDeniedHandler accessDeniedHandler;
@@ -55,6 +63,13 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(PUBLIC_URLS).permitAll()
                         .requestMatchers("/api/admin/**").hasRole(Role.ADMIN.name())
+                        .requestMatchers(HttpMethod.GET, "/api/users/**").hasAnyRole(Role.ADMIN.name(), Role.MANAGER.name())
+                        .requestMatchers("/api/users/**").hasRole(Role.ADMIN.name())
+                        .requestMatchers(HttpMethod.GET, "/api/departments/**", "/api/employees/**").authenticated()
+                        .requestMatchers("/api/departments/**", "/api/employees/**").hasRole(Role.ADMIN.name())
+                        .requestMatchers(HttpMethod.GET, MANAGER_EDITABLE_URLS).authenticated()
+                        .requestMatchers(HttpMethod.DELETE, MANAGER_EDITABLE_URLS).hasRole(Role.ADMIN.name())
+                        .requestMatchers(MANAGER_EDITABLE_URLS).hasAnyRole(Role.ADMIN.name(), Role.MANAGER.name())
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
